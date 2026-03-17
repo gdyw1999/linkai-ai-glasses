@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">GlassesSDKSample</string>
+    <string name="text_1">Scan</string>
+    <string name="text_2">Reconnect</string>
+    <string name="text_3">Disconnect</string>
+    <string name="text_4">Set time</string>
+    <string name="text_22">Connecting...</string>
+    <string name="text_5">Get version</string>
+    <string name="text_6">Photo</string>
+    <string name="text_7">Video</string>
+    <string name="text_8">Audio recording</string>
+    <string name="text_9">Smart photo recognition</string>
+    <string name="text_10">BT pairing</string>
+    <string name="text_11">Register and report monitoring</string>
+    <string name="text_12">Battery level</string>
+    <string name="text_13">Read volume</string>
+    <string name="text_14">Read the number of glasses media</string>
+    <string name="text_15">Synchronize glasses\' media (photos, videos, recordings)</string>
+    <string name="text_16">结束眼镜音频上报</string>
+</resources>

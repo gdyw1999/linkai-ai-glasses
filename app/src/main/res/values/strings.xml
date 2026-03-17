@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">青橙AI眼镜</string>
+    
+    <!-- 权限相关 -->
+    <string name="permission_bluetooth_rationale">需要蓝牙权限以连接眼镜设备</string>
+    <string name="permission_location_rationale">需要位置权限以扫描蓝牙设备（Android系统要求）</string>
+    <string name="permission_storage_rationale">需要存储权限以保存同步的媒体文件</string>
+    <string name="permission_microphone_rationale">需要麦克风权限以使用语音对话功能</string>
+    
+    <!-- 连接相关 -->
+    <string name="bluetooth_disabled">请开启蓝牙</string>
+    <string name="scanning_devices">正在扫描设备...</string>
+    <string name="connecting">正在连接...</string>
+    <string name="connected">已连接</string>
+    <string name="disconnected">已断开</string>
+    <string name="connection_failed">连接失败</string>
+    
+    <!-- 通用 -->
+    <string name="ok">确定</string>
+    <string name="cancel">取消</string>
+    <string name="retry">重试</string>
+    <string name="settings">设置</string>
+    
+    <!-- 前台服务 -->
+    <string name="foreground_service_title">青橙AI眼镜</string>
+    <string name="foreground_service_content">已连接，语音唤醒已启用</string>
+</resources>
