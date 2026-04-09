@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -765,115 +767,129 @@ fun CrashLogDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    // 0 = 崩溃日志, 1 = 运行日志
+    var selectedTab by remember { mutableIntStateOf(0) }
     var crashLog by remember { mutableStateOf("") }
+    var appLog by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
     var showCopiedToast by remember { mutableStateOf(false) }
-    
-    // 加载崩溃日志
+
+    // 在 IO 线程加载日志，避免主线程阻塞
     LaunchedEffect(Unit) {
-        crashLog = com.glasses.app.util.CrashLogHelper.readCrashLog(context)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val crash = com.glasses.app.util.CrashLogHelper.readCrashLog(context)
+            val app = com.glasses.app.util.AppLogger.readLog(context)
+            // 限制显示大小：最多显示末尾 32KB，避免大文件卡顿
+            val maxDisplay = 32 * 1024
+            crashLog = if (crash.length > maxDisplay) "...(已截取尾部)\n" + crash.takeLast(maxDisplay) else crash
+            appLog = if (app.length > maxDisplay) "...(已截取尾部)\n" + app.takeLast(maxDisplay) else app
+        }
         isLoading = false
     }
-    
+
+    val currentLog = if (selectedTab == 0) crashLog else appLog
+
     // 复制到剪贴板
     val copyToClipboard = {
         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        val clip = android.content.ClipData.newPlainText("crash_log", crashLog)
+        val clip = android.content.ClipData.newPlainText("log", currentLog)
         clipboard.setPrimaryClip(clip)
         showCopiedToast = true
     }
-    
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "崩溃日志",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = "日志",
-                    tint = Color(0xFF2196F3),
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            Text(text = "应用日志", fontWeight = FontWeight.Bold, fontSize = 18.sp)
         },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 400.dp),
+                    .heightIn(max = 450.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 日志路径提示
+                // Tab 切换
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf("崩溃日志", "运行日志").forEachIndexed { index, label ->
+                        val selected = selectedTab == index
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { selectedTab = index },
+                            color = if (selected) Color(0xFF2196F3) else Color.Transparent,
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (selected) Color.White else Color(0xFF666666),
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 12.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                // 日志路径
+                val logPath = if (selectedTab == 0)
+                    com.glasses.app.util.CrashLogHelper.getCrashLogPath(context)
+                else
+                    com.glasses.app.util.AppLogger.getLogFile(context).absolutePath
+
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color(0xFFE3F2FD),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(6.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = Color(0xFF1976D2),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "日志路径: ${com.glasses.app.util.CrashLogHelper.getCrashLogPath(context)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF1976D2),
-                            fontSize = 10.sp
-                        )
-                    }
+                    Text(
+                        text = logPath,
+                        modifier = Modifier.padding(8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF1976D2),
+                        fontSize = 9.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    )
                 }
-                
+
                 // 日志内容
                 if (isLoading) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
+                        modifier = Modifier.fillMaxWidth().height(200.dp),
                         contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
+                    ) { CircularProgressIndicator() }
                 } else {
-                    if (crashLog.isEmpty() || crashLog == "No crash log found") {
+                    val noLogText = if (selectedTab == 0) "暂无崩溃日志" else "暂无运行日志"
+                    val isEmpty = currentLog.isEmpty() ||
+                            currentLog == "No crash log found" ||
+                            currentLog == "No log found"
+
+                    if (isEmpty) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp),
+                            modifier = Modifier.fillMaxWidth().height(150.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "暂无崩溃日志",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFF999999)
-                            )
+                            Text(text = noLogText, color = Color(0xFF999999))
                         }
                     } else {
                         Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 300.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp),
                             color = Color(0xFF1E1E1E),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = crashLog,
+                                text = currentLog,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(12.dp)
+                                    .padding(10.dp)
                                     .verticalScroll(rememberScrollState()),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
@@ -884,21 +900,20 @@ fun CrashLogDialog(
                         }
                     }
                 }
-                
+
                 // 复制成功提示
                 if (showCopiedToast) {
-                    LaunchedEffect(Unit) {
+                    LaunchedEffect(showCopiedToast) {
                         kotlinx.coroutines.delay(2000)
                         showCopiedToast = false
                     }
-                    
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         color = Color(0xFF4CAF50),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(10.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -906,14 +921,9 @@ fun CrashLogDialog(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(14.dp)
                             )
-                            Text(
-                                text = "已复制到剪贴板",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White,
-                                fontSize = 12.sp
-                            )
+                            Text(text = "已复制到剪贴板", color = Color.White, fontSize = 12.sp)
                         }
                     }
                 }
@@ -922,52 +932,49 @@ fun CrashLogDialog(
         confirmButton = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // 清空按钮
                 TextButton(
                     onClick = {
-                        com.glasses.app.util.CrashLogHelper.clearCrashLog(context)
-                        crashLog = "Crash log cleared"
+                        if (selectedTab == 0) {
+                            com.glasses.app.util.CrashLogHelper.clearCrashLog(context)
+                            crashLog = ""
+                        } else {
+                            com.glasses.app.util.AppLogger.clearLog(context)
+                            appLog = ""
+                        }
                     },
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = Color(0xFFE53935)
-                    )
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFE53935))
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(imageVector = Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("清空", fontSize = 12.sp)
                 }
-                
-                if (crashLog.isNotEmpty() && crashLog != "No crash log found" && crashLog != "Crash log cleared") {
+
+                // 复制按钮
+                val canCopy = currentLog.isNotEmpty() &&
+                        currentLog != "No crash log found" &&
+                        currentLog != "No log found"
+                if (canCopy) {
                     Button(
                         onClick = copyToClipboard,
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF2196F3)
-                        ),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
                         shape = RoundedCornerShape(6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("复制", fontSize = 12.sp)
                     }
                 }
-                
+
+                // 关闭按钮
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF666666)
-                    ),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF666666)),
                     shape = RoundedCornerShape(6.dp)
                 ) {
                     Text("关闭", fontSize = 12.sp)
