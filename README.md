@@ -1,26 +1,49 @@
-# 青橙AI眼镜 Android App
+# Linkai星韵AI眼镜 Android App
 
-青橙AI眼镜Android App是一款为青橙无线AR眼镜开发的配套手机控制应用。
+> **Linkai星韵AI眼镜** - LinkAI星系列首款AR智能眼镜配套应用
+
+## 产品介绍
+
+**Linkai星韵AI眼镜**是LinkAI星系列的首款AR智能眼镜产品，通过AI语音交互实现智能问答、信息查询等功能。本应用是眼镜的配套手机控制端。
+
+### 产品特点
+
+- 🌟 **AI语音助手** - 基于LinkAI大模型的智能对话
+- 📸 **拍照录像** - 一键捕捉精彩瞬间
+- 🎤 **录音功能** - 语音备忘录
+- 🔄 **WiFi同步** - 快速同步媒体文件
+- 🔋 **电量管理** - 实时监控眼镜电量
+
+---
 
 ## 项目信息
 
-- **包名**: com.glasses.app
-- **最低SDK**: Android 7.0 (API 24)
-- **目标SDK**: Android 14 (API 35)
-- **开发语言**: Kotlin
-- **UI框架**: Jetpack Compose
+| 项目 | 说明 |
+|------|------|
+| **产品名称** | Linkai星韵AI眼镜 |
+| **产品系列** | LinkAI星系列 |
+| **包名** | com.glasses.app |
+| **最低SDK** | Android 7.0 (API 24) |
+| **目标SDK** | Android 14 (API 34) |
+| **开发语言** | Kotlin |
+| **UI框架** | Jetpack Compose |
+
+---
 
 ## 技术栈
 
-- **UI**: Jetpack Compose + Material3
-- **架构**: MVVM (ViewModel + Repository)
-- **数据库**: Room
-- **网络**: Retrofit + OkHttp
-- **图片加载**: Coil
-- **权限管理**: XXPermissions
-- **事件总线**: EventBus
-- **后台任务**: WorkManager
-- **蓝牙SDK**: 青橙SDK (LIB_GLASSES_SDK-release.aar)
+| 分类 | 技术 |
+|------|------|
+| **UI** | Jetpack Compose + Material3 |
+| **架构** | MVVM (ViewModel + Repository) |
+| **数据库** | Room |
+| **网络** | Retrofit + OkHttp |
+| **图片加载** | Coil |
+| **权限管理** | 原生ActivityCompat |
+| **蓝牙SDK** | 青橙SDK (LIB_GLASSES_SDK-release.aar) |
+| **AI服务** | LinkAI API (ASR + LLM + TTS) |
+
+---
 
 ## 项目结构
 
@@ -45,35 +68,27 @@ app/src/main/java/com/glasses/app/
 │   ├── model/                   # 数据模型
 │   └── usecase/                 # 业务用例
 ├── service/                     # 服务层
+│   ├── wakeup/                  # 唤醒服务（语音/按键）
+│   └── GlassesConnectionService # 蓝牙连接服务
 ├── manager/                     # 管理器层
+│   └── RecordingManager         # 录音管理
 └── util/                        # 工具类
-    ├── PermissionUtil.kt        # 权限管理（复用官方demo）
-    ├── BluetoothUtils.java      # 蓝牙工具（复用官方demo）
-    └── ActivityExt.kt           # Activity扩展（复用官方demo）
 ```
+
+---
 
 ## 核心功能
 
 ### MVP阶段（当前）
 
-1. **设备连接管理**
-   - 蓝牙设备扫描和连接
-   - 连接状态监控
-   - 电量查询和显示
+| 模块 | 功能 |
+|------|------|
+| **设备连接** | 蓝牙扫描、连接、断开、电量查询 |
+| **媒体采集** | 拍照、录像、录音、智能识图 |
+| **AI对话** | 语音识别、对话生成、语音合成、会话管理 |
+| **媒体管理** | WiFi同步、相册浏览 |
 
-2. **媒体采集控制**
-   - 拍照、录像、录音控制
-   - 智能识图功能
-
-3. **AI语音对话**
-   - 语音识别（ASR）
-   - 对话生成（LLM）
-   - 语音合成（TTS）
-   - 会话管理
-
-4. **媒体同步管理**
-   - WiFi文件传输
-   - 相册浏览和管理
+---
 
 ## 开发环境
 
@@ -82,13 +97,37 @@ app/src/main/java/com/glasses/app/
 - **Gradle**: 8.2.2
 - **JDK**: 17
 
-## 构建项目
+---
 
-1. 克隆项目到本地
-2. 使用Android Studio打开项目
-3. 等待Gradle同步完成
-4. 连接Android设备或启动模拟器
-5. 点击运行按钮
+## 快速开始
+
+### 构建项目
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/gdyw1999/linkai-ai-glasses.git
+cd linkai-ai-glasses
+
+# 2. 使用Android Studio打开项目
+
+# 3. 等待Gradle同步完成
+
+# 4. 连接Android设备或启动模拟器
+
+# 5. 点击运行按钮
+```
+
+### 构建APK
+
+```bash
+# Windows
+./build-apk.bat
+
+# Linux/Mac
+./build-apk.sh
+```
+
+---
 
 ## 依赖库
 
@@ -101,20 +140,43 @@ app/src/main/java/com/glasses/app/
 - OkHttp 4.12.0
 - Coil 2.5.0
 - XXPermissions 20.0
-- EventBus 3.3.1
-- WorkManager 2.9.0
+
+---
 
 ## 参考文档
 
-- [需求文档](.kiro/specs/glasses-app-mvp/requirements.md)
-- [设计文档](.kiro/specs/glasses-app-mvp/design.md)
-- [任务列表](.kiro/specs/glasses-app-mvp/tasks.md)
-- [青橙SDK使用说明](src/GLASSES_SDK_20260112_V1.1/青橙无线眼镜SDK使用说明.md)
+| 文档 | 路径 |
+|------|------|
+| 设计文档 | `docs/superpowers/specs/2026-03-16-glasses-app-design.md` |
+| MVP定义 | `04-MVP核心功能定义.md` |
+| SDK分析 | `01-SDK分析设计.md` |
+| LinkAI接口 | `docs/linkai接口.md` |
+| 青橙SDK说明 | `src/GLASSES_SDK_20260112_V1.1/青橙无线眼镜SDK使用说明.md` |
+
+---
 
 ## 版本历史
 
-- **v1.0.0** (2026-03-16): 项目初始化，基础架构搭建
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| v1.0.0 | 2026-03-17 | 初次提交，基础架构搭建 |
+| v1.1.0 | 2026-04-09 | 修复鸿蒙兼容性、集成所有后端模块、接入SDK媒体控制 |
+
+---
+
+## 产品系列
+
+> **LinkAI星系列** - 专注于AI智能穿戴设备的创新产品线
+
+---
 
 ## 许可证
 
-Copyright © 2026 青橙AI眼镜团队
+Copyright © 2026 LinkAI
+
+---
+
+## 联系方式
+
+- GitHub: [@gdyw1999](https://github.com/gdyw1999)
+- Email: gdyw1999@163.com

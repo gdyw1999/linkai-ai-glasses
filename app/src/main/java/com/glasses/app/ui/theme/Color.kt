@@ -10,7 +10,7 @@ val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
-// 青橙主题色
+// Linkai星韵主题色
 val OrangePrimary = Color(0xFFFF6B35)
 val OrangeSecondary = Color(0xFFFF8C5A)
 val BackgroundWhite = Color(0xFFFFFFFF)

@@ -2,13 +2,13 @@
 
 ## 介绍
 
-青橙AI眼镜Android App是一款为青橙无线AR眼镜开发的配套手机控制应用。该应用通过蓝牙和WiFi与眼镜设备通信，提供设备连接管理、媒体采集控制、AI语音对话、媒体同步管理等核心功能。应用基于Android原生开发，使用Kotlin语言和Jetpack Compose UI框架，集成青橙SDK和LinkAI API，为用户提供便捷的智能眼镜控制体验。
+Linkai星韵AI眼镜Android App是一款为Linkai星韵无线AR眼镜开发的配套手机控制应用。该应用通过蓝牙和WiFi与眼镜设备通信，提供设备连接管理、媒体采集控制、AI语音对话、媒体同步管理等核心功能。应用基于Android原生开发，使用Kotlin语言和Jetpack Compose UI框架，集成Linkai星韵SDK和LinkAI API，为用户提供便捷的智能眼镜控制体验。
 
 ## 术语表
 
-- **App**: 青橙AI眼镜Android应用程序
-- **Glasses**: 青橙无线AR眼镜硬件设备
-- **SDK**: 青橙提供的Android SDK (LIB_GLASSES_SDK-release.aar)
+- **App**: Linkai星韵AI眼镜Android应用程序
+- **Glasses**: Linkai星韵无线AR眼镜硬件设备
+- **SDK**: Linkai星韵提供的Android SDK (LIB_GLASSES_SDK-release.aar)
 - **LinkAI**: LinkAI平台提供的AI服务API
 - **ASR**: 自动语音识别 (Automatic Speech Recognition)，将语音转换为文字
 - **LLM**: 大语言模型 (Large Language Model)，用于对话生成

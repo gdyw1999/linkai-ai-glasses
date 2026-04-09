@@ -1,19 +1,26 @@
 package com.glasses.app
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.core.content.ContextCompat
-import com.glasses.app.ui.test.TestScreen
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
+import androidx.navigation.compose.rememberNavController
+import com.glasses.app.ui.navigation.NavGraph
+import com.glasses.app.ui.navigation.NavRoutes
+import com.glasses.app.ui.permission.PermissionDeniedDialog
+import com.glasses.app.ui.permission.PermissionScreen
 import com.glasses.app.ui.theme.GlassesAppTheme
+import com.glasses.app.util.PermissionHelper
 
 /**
  * 主Activity
@@ -21,24 +28,16 @@ import com.glasses.app.ui.theme.GlassesAppTheme
  */
 class MainActivity : ComponentActivity() {
     
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        // 权限请求结果处理
-        permissions.entries.forEach { entry ->
-            val permission = entry.key
-            val isGranted = entry.value
-            if (!isGranted) {
-                // 可以显示权限说明对话框
-            }
-        }
-    }
+    private lateinit var permissionHelper: PermissionHelper
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // 请求必要权限
-        requestPermissions()
+        // 初始化权限管理器
+        permissionHelper = PermissionHelper(this)
+        
+        // 延迟初始化SDK，避免阻塞UI
+        (application as? GlassesApplication)?.initializeSDK()
         
         setContent {
             GlassesAppTheme {
@@ -46,48 +45,213 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    TestScreen()
+                    AppContent(permissionHelper)
                 }
             }
         }
     }
+}
+
+/**
+ * 应用内容 - 处理权限检查和主界面显示
+ */
+@Composable
+private fun AppContent(permissionHelper: PermissionHelper) {
+    var hasPermissions by remember { 
+        mutableStateOf(PermissionHelper.hasAllRequiredPermissions(permissionHelper.activity))
+    }
+    var showDeniedDialog by remember { mutableStateOf(false) }
+    var deniedPermissions by remember { mutableStateOf<List<String>>(emptyList()) }
     
-    private fun requestPermissions() {
-        val permissions = mutableListOf<String>()
+    if (hasPermissions) {
+        // 有权限，显示主界面
+        MainScreen()
+    } else {
+        // 没有权限，显示权限请求界面
+        PermissionScreen(
+            onRequestPermissions = {
+                permissionHelper.requestAllPermissions(
+                    onGranted = {
+                        hasPermissions = true
+                    },
+                    onDenied = { denied ->
+                        deniedPermissions = denied
+                        showDeniedDialog = true
+                    }
+                )
+            }
+        )
         
-        // 蓝牙权限
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
-            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
-        } else {
-            permissions.add(Manifest.permission.BLUETOOTH)
-            permissions.add(Manifest.permission.BLUETOOTH_ADMIN)
+        // 权限被拒绝对话框
+        if (showDeniedDialog) {
+            PermissionDeniedDialog(
+                deniedPermissions = deniedPermissions,
+                onDismiss = {
+                    showDeniedDialog = false
+                    // 即使被拒绝也进入主界面，但功能会受限
+                    hasPermissions = true
+                },
+                onOpenSettings = {
+                    // 打开应用设置页面
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", permissionHelper.activity.packageName, null)
+                    }
+                    permissionHelper.activity.startActivity(intent)
+                    showDeniedDialog = false
+                }
+            )
         }
-        
-        // 位置权限（蓝牙扫描需要）
-        permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
-        permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
-        
-        // 录音权限
-        permissions.add(Manifest.permission.RECORD_AUDIO)
-        
-        // 存储权限
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
-            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
-            permissions.add(Manifest.permission.READ_MEDIA_AUDIO)
-        } else {
-            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+    }
+}
+
+/**
+ * 主屏幕 - 包含导航栏和页面内容
+ */
+@Composable
+fun MainScreen() {
+    val navController = rememberNavController()
+    var currentRoute by remember { mutableStateOf(NavRoutes.HOME) }
+    
+    // 监听导航变化
+    LaunchedEffect(navController) {
+        navController.currentBackStackEntryFlow.collect { backStackEntry ->
+            currentRoute = backStackEntry.destination.route ?: NavRoutes.HOME
         }
-        
-        // 过滤已授予的权限
-        val permissionsToRequest = permissions.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+    }
+    
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            BottomNavigationBar(
+                currentRoute = currentRoute,
+                onNavigate = { route ->
+                    navController.navigate(route) {
+                        popUpTo(navController.graph.startDestinationId) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
         }
+    ) {
+        // 导航内容
+        NavGraph(navController)
+    }
+}
+
+/**
+ * 底部导航栏
+ */
+@Composable
+fun BottomNavigationBar(
+    currentRoute: String,
+    onNavigate: (String) -> Unit
+) {
+    NavigationBar(
+        modifier = Modifier,
+        containerColor = Color.White,
+        contentColor = Color(0xFF2196F3)
+    ) {
+        NavigationBarItem(
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Home,
+                    contentDescription = "首页",
+                    modifier = Modifier
+                )
+            },
+            label = {
+                Text(
+                    text = "首页",
+                    fontSize = 11.sp
+                )
+            },
+            selected = currentRoute == NavRoutes.HOME,
+            onClick = { onNavigate(NavRoutes.HOME) },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color(0xFF2196F3),
+                selectedTextColor = Color(0xFF2196F3),
+                unselectedIconColor = Color(0xFFCCCCCC),
+                unselectedTextColor = Color(0xFFCCCCCC),
+                indicatorColor = Color(0xFFE3F2FD)
+            )
+        )
         
-        if (permissionsToRequest.isNotEmpty()) {
-            permissionLauncher.launch(permissionsToRequest.toTypedArray())
-        }
+        NavigationBarItem(
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "AI对话",
+                    modifier = Modifier
+                )
+            },
+            label = {
+                Text(
+                    text = "AI对话",
+                    fontSize = 11.sp
+                )
+            },
+            selected = currentRoute == NavRoutes.CHAT,
+            onClick = { onNavigate(NavRoutes.CHAT) },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color(0xFF2196F3),
+                selectedTextColor = Color(0xFF2196F3),
+                unselectedIconColor = Color(0xFFCCCCCC),
+                unselectedTextColor = Color(0xFFCCCCCC),
+                indicatorColor = Color(0xFFE3F2FD)
+            )
+        )
+        
+        NavigationBarItem(
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = "相册",
+                    modifier = Modifier
+                )
+            },
+            label = {
+                Text(
+                    text = "相册",
+                    fontSize = 11.sp
+                )
+            },
+            selected = currentRoute == NavRoutes.GALLERY,
+            onClick = { onNavigate(NavRoutes.GALLERY) },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color(0xFF2196F3),
+                selectedTextColor = Color(0xFF2196F3),
+                unselectedIconColor = Color(0xFFCCCCCC),
+                unselectedTextColor = Color(0xFFCCCCCC),
+                indicatorColor = Color(0xFFE3F2FD)
+            )
+        )
+        
+        NavigationBarItem(
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "我的",
+                    modifier = Modifier
+                )
+            },
+            label = {
+                Text(
+                    text = "我的",
+                    fontSize = 11.sp
+                )
+            },
+            selected = currentRoute == NavRoutes.PROFILE,
+            onClick = { onNavigate(NavRoutes.PROFILE) },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color(0xFF2196F3),
+                selectedTextColor = Color(0xFF2196F3),
+                unselectedIconColor = Color(0xFFCCCCCC),
+                unselectedTextColor = Color(0xFFCCCCCC),
+                indicatorColor = Color(0xFFE3F2FD)
+            )
+        )
     }
 }

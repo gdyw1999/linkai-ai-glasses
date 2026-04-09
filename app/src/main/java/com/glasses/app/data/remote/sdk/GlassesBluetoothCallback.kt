@@ -11,7 +11,7 @@ import com.glasses.app.GlassesApplication
 import org.greenrobot.eventbus.EventBus
 
 /**
- * 青橙SDK蓝牙回调监听器
+ * Linkai星韵AI眼镜SDK蓝牙回调监听器
  * 监听连接状态、服务发现、特征值变化等SDK级事件
  * 参考官方demo的MyBluetoothReceiver.kt实现
  */

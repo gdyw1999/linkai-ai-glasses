@@ -17,7 +17,7 @@ import kotlin.coroutines.suspendCoroutine
 
 /**
  * 录音管理器
- * 管理眼镜端录音的启动、停止和文件下载
+ * 管理Linkai星韵AI眼镜端录音的启动、停止和文件下载
  * 实现30秒最长时间限制和5秒静音超时检测
  */
 class RecordingManager private constructor(private val context: Context) {

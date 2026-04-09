@@ -1,6 +1,6 @@
-# 青橙AI眼镜Android App 设计文档
+# Linkai星韵AI眼镜Android App 设计文档
 
-**项目**: 青橙AI眼镜Android App (MVP)
+**项目**: Linkai星韵AI眼镜Android App (MVP)
 **版本**: V1.0
 **日期**: 2026-03-16
 **状态**: 设计阶段
@@ -9,7 +9,7 @@
 
 ## 概述
 
-青橙AI眼镜Android App是一款为青橙无线AR眼镜开发的配套手机控制应用。该应用通过蓝牙和WiFi与眼镜设备通信，提供设备连接管理、媒体采集控制、AI语音对话、媒体同步管理等核心功能。
+Linkai星韵AI眼镜Android App是一款为Linkai星韵无线AR眼镜开发的配套手机控制应用。该应用通过蓝牙和WiFi与眼镜设备通信，提供设备连接管理、媒体采集控制、AI语音对话、媒体同步管理等核心功能。
 
 **项目定位**: 本项目是MVP阶段，专注于基础对话和设备控制能力。后续将集成OpenClaw（开源AI自动化代理引擎），使眼镜从"语音控制工具"升级为具备自主执行能力的"AI数字助手"。
 
@@ -28,7 +28,7 @@
 | UI框架 | Jetpack Compose | 现代化声明式UI框架 |
 | 网络库 | Retrofit + OkHttp | HTTP请求和API调用 |
 | 数据库 | Room | 本地会话和消息存储 |
-| 蓝牙SDK | 青橙SDK (LIB_GLASSES_SDK-release.aar) | 眼镜设备控制 |
+| 蓝牙SDK | Linkai星韵SDK (LIB_GLASSES_SDK-release.aar) | 眼镜设备控制 |
 | AI服务 | LinkAI API | ASR + LLM + TTS |
 | 图片加载 | Coil | 媒体缩略图加载和缓存 |
 | 权限管理 | XXPermissions | 运行时权限请求（与官方demo一致） |

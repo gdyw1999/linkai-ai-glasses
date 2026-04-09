@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("kotlin-kapt")
 }
 
 android {
@@ -55,11 +56,12 @@ android {
 }
 
 dependencies {
-    // 青橙SDK
+    // Linkai星韵AI眼镜SDK
     implementation(files("libs/LIB_GLASSES_SDK-release.aar"))
     
     // Android核心库
     implementation("androidx.core:core-ktx:1.10.1")
+    implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
     implementation("androidx.activity:activity-compose:1.7.2")
     implementation("androidx.fragment:fragment-ktx:1.6.1")
@@ -74,8 +76,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.1")
     
     // Room数据库
-    implementation("androidx.room:room-runtime:2.5.2")
-    implementation("androidx.room:room-ktx:2.5.2")
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
     
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.8.1")
@@ -88,6 +91,7 @@ dependencies {
     
     // 图片加载
     implementation("io.coil-kt:coil-compose:2.4.0")
+    implementation("io.coil-kt:coil:2.4.0")
     
     // 本地广播
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
@@ -98,8 +102,13 @@ dependencies {
     // 权限管理库
     implementation("com.github.getActivity:XXPermissions:20.0")
     
+    // 媒体播放器
+    implementation("androidx.media3:media3-exoplayer:1.1.1")
+    implementation("androidx.media3:media3-ui:1.1.1")
+    
     // 测试库
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.11.1")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.5.3")

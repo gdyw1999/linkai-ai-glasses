@@ -23,7 +23,7 @@ fun TestScreen(
             .padding(16.dp)
     ) {
         Text(
-            text = "青橙眼镜测试界面",
+            text = "Linkai星韵AI眼镜测试界面",
             style = MaterialTheme.typography.headlineMedium
         )
         
