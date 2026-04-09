@@ -2,62 +2,74 @@
 
 All notable changes to the Linkai星韵AI眼镜Android App project will be documented in this file.
 
+## [1.2.0] - 2026-04-09
+
+### Added - 新功能
+
+- **API Key 动态配置**
+  - `ApiKeyManager` 支持语音Key（ASR/TTS）和对话Key（LLM）分开管理
+  - `LinkAIClient` 每次HTTP请求前自动从 ApiKeyManager 重新读取最新 Key，保存后立即生效无需重启
+  - 未配置 Key 时给出明确引导提示（"请先在「我的」→「API配置」中设置..."）
+  - 支持通过「我的」页面 UI 配置 API Key
+
+- **日志系统（Task 23）**
+  - 新增 `AppLogger` 工具类，支持 DEBUG / INFO / WARN / ERROR 四级日志
+  - 日志写入文件 `app_log.txt`，超过 10MB 自动清理旧日志
+  - 在 `GlassesApplication` 中初始化
+  - ProfileScreen「查看日志」对话框支持两个 Tab：
+    - 崩溃日志 - 显示 `crash_log.txt`
+    - 运行日志 - 显示 `app_log.txt`
+  - 两个 Tab 均支持复制和清空操作
+
+- **HomeScreen 媒体采集实时状态**
+  - 录像/录音时实时监听 `MediaCaptureState`，更新录制时长显示
+  - 录制中显示计时器卡片
+
 ## [1.1.0] - 2026-04-09
 
 ### Fixed - 关键崩溃修复
 
-- **修复鸿蒙4.0兼容性崩溃**：`registerReceiver(receiver, filter, flags)` 三参数版本仅在 API 33+ 可用，鸿蒙基于 Android 10-12 会抛 NoSuchMethodError。将条件从 `>= O` 改为 `>= TIRAMISU`
-- **修复 AlertDialog 主题崩溃**：`androidx.appcompat.app.AlertDialog` 需要 AppCompat 主题，改为 `android.app.AlertDialog`（系统原生）
-- **修复 SDK 初始化链断裂**：`GlassesApplication.initBle()` 中 `initReceiver()` 抛异常导致后续回调注册和上下文设置全被跳过。拆分为独立步骤，每步独立 try-catch
+- **修复鸿蒙4.0兼容性崩溃**：`registerReceiver(receiver, filter, flags)` 三参数版本仅在 API 33+ 可用，将条件从 `>= O` 改为 `>= TIRAMISU`
+- **修复 AlertDialog 主题崩溃**：改为 `android.app.AlertDialog`（系统原生）
+- **修复 SDK 初始化链断裂**：拆分为独立步骤，每步独立 try-catch
 - **修复前台服务被临时禁用**：恢复 `GlassesConnectionService.startService()` 调用
-- **修复图标引用错误**：`BatteryStd`、`BatteryChargingFull`、`BatteryAlert`、`Bolt`、`Sync` 不在默认 Material Icons 集中，替换为可用图标
-- **修复电量始终为0**：旧的 `addBatteryCallBack` + 反射方式无法获取电量，改为官方demo方式 `addOutDeviceListener` + `GlassesDeviceNotifyListener` + `syncBattery()`
+- **修复图标引用错误**：替换为默认 Material Icons 集中可用的图标
+- **修复电量始终为0**：改为官方demo方式 `addOutDeviceListener` + `GlassesDeviceNotifyListener` + `syncBattery()`
 - **修复 MediaViewerScreen 属性引用**：`fileSize` → `size`，`timestamp` → `createTime`
-- **修复 ChatScreen `SwipeToDismissBox`**：API不可用，改用 `combinedClickable` 长按删除
+- **修复 ChatScreen `SwipeToDismissBox`**：改用 `combinedClickable` 长按删除
 
-### Added - 新功能
+### Added
 
-- **GlassesDeviceNotifyListener**：接收眼镜端推送的电量、按键、语音唤醒、OTA等通知
-- **CrashLogHelper**：全局崩溃日志处理器，写入 `Android/data/com.glasses.app/files/crash_log.txt`
-- **HomeViewModel 接入 MediaCaptureManager**：拍照、录像、录音、智能识图按钮真正调用SDK指令
-- **前台服务异常保护**：GlassesConnectionService 各步骤添加独立异常捕获和日志
+- **GlassesDeviceNotifyListener**：接收眼镜端电量、按键、语音唤醒、OTA等通知
+- **CrashLogHelper**：全局崩溃日志处理器
+- **HomeViewModel 接入 MediaCaptureManager**：拍照、录像、录音、智能识图按钮调用SDK指令
+- **前台服务异常保护**：各步骤独立异常捕获和日志
 
 ### Changed
 
-- SDK 初始化流程重构：`initSDKCore()` → `registerBluetoothReceiver()` → `registerSDKCallback()` → `setmContext()`，各步独立
+- SDK 初始化流程重构为独立步骤
 - 电量获取方式从反射改为官方demo标准方式
-- 周期性电量监控从反射式 `getBatteryLevel()` 改为 `syncBattery()` + 监听器回调
-- `README.md`：修正 targetSdk 为 34，修正权限管理为原生 ActivityCompat
+- 周期性电量监控改为 `syncBattery()` + 监听器回调
 
 ### Documentation
 
-- 更新 `集成状态报告.md`：所有4个页面已集成完成
-- 更新 `README.md`：修正SDK版本、更新版本历史
-- 更新 `CHANGELOG.md`：精简并反映实际修改
+- 更新 `集成状态报告.md`、`README.md`、`CHANGELOG.md`
 
 ## [1.0.0] - 2026-03-17
 
 ### Added
 
-- 初始项目架构搭建
-- MVVM 架构（ViewModel + Repository + Room）
-- Jetpack Compose + Material3 UI框架
+- 初始项目架构搭建（MVVM + Jetpack Compose + Material3）
 - 4个主要页面：首页、AI对话、相册、我的
-- 底部导航栏
-- 蓝牙SDK封装（扫描、连接、断开）
-- AI服务集成（ASR + LLM + TTS）
-- 流式对话管理
-- 媒体采集控制（拍照、录像、录音）
-- 媒体同步管理
-- 权限管理
-- 前台服务和后台保活
+- 蓝牙SDK封装、AI服务集成、流式对话管理
+- 媒体采集控制、媒体同步管理
+- 权限管理、前台服务、后台保活
 
-### 🔴 已知问题
+### 已知问题
 
-1. **录音文件下载** - 需要集成SDK的WiFi文件下载功能（当前使用临时空文件）
-2. **静音检测** - SDK暂时没有提供实时音频电平接口
-3. **API Key** - LinkAIClient.kt 中的 API_KEY 需要用户配置
-4. **检查更新** - ProfileViewModel 的检查更新功能是模拟的
+1. **录音文件下载** - 需要集成SDK的WiFi文件下载功能
+2. **静音检测** - SDK暂无实时音频电平接口
+3. **检查更新** - ProfileViewModel 检查更新功能是模拟的
 
 ---
 

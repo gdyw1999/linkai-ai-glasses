@@ -139,7 +139,7 @@ cd linkai-ai-glasses
 - Retrofit 2.9.0
 - OkHttp 4.12.0
 - Coil 2.5.0
-- XXPermissions 20.0
+- XXPermissions 20.0（已改用原生ActivityCompat）
 
 ---
 
@@ -152,15 +152,25 @@ cd linkai-ai-glasses
 | SDK分析 | `01-SDK分析设计.md` |
 | LinkAI接口 | `docs/linkai接口.md` |
 | 青橙SDK说明 | `src/GLASSES_SDK_20260112_V1.1/青橙无线眼镜SDK使用说明.md` |
+- 需求文档: `.kiro/specs/glasses-app-mvp/requirements.md`
+- 设计文档: `.kiro/specs/glasses-app-mvp/design.md`
+- 官方SDK demo: `src/GLASSES_SDK_20260112_V1.1/GlassesSDKSample/`
+- LinkAI API文档: `docs/linkai接口.md`
 
----
+## 注意事项
+
+1. **复用优先**: 标注"复用官方demo"的任务,直接从官方SDK demo复制代码
+2. **Checkpoint**: 在关键节点设置Checkpoint,确保功能正常后再继续
+3. **官方demo路径**: `src/GLASSES_SDK_20260112_V1.1/GlassesSDKSample/`
+
 
 ## 版本历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | v1.0.0 | 2026-03-17 | 初次提交，基础架构搭建 |
-| v1.1.0 | 2026-04-09 | 修复鸿蒙兼容性、集成所有后端模块、接入SDK媒体控制 |
+| v1.1.0 | 2026-04-09 | 修复鸿蒙兼容性崩溃、集成全部后端模块、接入SDK媒体控制 |
+| v1.2.0 | 2026-04-09 | API Key动态配置、日志系统（AppLogger）、媒体采集实时状态 |
 
 ---
 
