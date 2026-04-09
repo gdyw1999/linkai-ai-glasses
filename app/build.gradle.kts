@@ -53,6 +53,13 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    testOptions {
+        unitTests.all {
+            // Ensure Robolectric uses a writable home directory in restricted environments.
+            it.systemProperty("user.home", rootDir.absolutePath)
+        }
+    }
 }
 
 dependencies {

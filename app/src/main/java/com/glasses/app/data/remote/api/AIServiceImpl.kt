@@ -37,6 +37,33 @@ class AIServiceImpl(private val context: Context) {
     }
     
     private val apiService = LinkAIClient.apiService
+
+    /**
+     * 获取当前语音 API Key（ASR/TTS 专用）
+     */
+    private fun getVoiceApiKey(): String {
+        val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
+        return apiKeyManager.getLinkAIVoiceApiKey()
+    }
+
+    /**
+     * 获取当前对话 API Key（LLM 专用）
+     */
+    private fun getChatApiKey(): String {
+        val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
+        return apiKeyManager.getLinkAIChatApiKey()
+    }
+
+    /**
+     * 检查 API Key 是否已配置
+     */
+    private fun checkApiKey(type: String = "voice"): Result<Unit> {
+        val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
+        val hasKey = if (type == "chat") apiKeyManager.hasLinkAIChatApiKey()
+                     else apiKeyManager.hasLinkAIVoiceApiKey()
+        return if (hasKey) Result.success(Unit)
+               else Result.failure(Exception("请先在「我的」→「API配置」中设置 LinkAI ${if (type == "chat") "对话" else "语音"} API Key"))
+    }
     
     /**
      * 语音识别（ASR）
@@ -47,6 +74,9 @@ class AIServiceImpl(private val context: Context) {
      */
     suspend fun transcribeAudio(audioFile: File): Result<String> = withContext(Dispatchers.IO) {
         try {
+            // 检查 API Key
+            checkApiKey("voice").onFailure { return@withContext Result.failure(it) }
+
             Log.d(TAG, "Transcribing audio: ${audioFile.absolutePath}")
             
             // 创建multipart请求
@@ -87,6 +117,8 @@ class AIServiceImpl(private val context: Context) {
         appCode: String? = null
     ): Result<ChatResponse> = withContext(Dispatchers.IO) {
         try {
+            checkApiKey("chat").onFailure { return@withContext Result.failure(it) }
+
             Log.d(TAG, "Sending chat request: question=$question, sessionId=$sessionId")
             
             val request = ChatRequest(
@@ -129,6 +161,11 @@ class AIServiceImpl(private val context: Context) {
         appCode: String? = null
     ): Flow<String> = flow {
         try {
+            val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
+            if (!apiKeyManager.hasLinkAIChatApiKey()) {
+                throw Exception("请先在「我的」→「API配置」中设置 LinkAI 对话 API Key")
+            }
+
             Log.d(TAG, "Sending streaming chat request: question=$question")
             
             val request = ChatRequest(
@@ -191,6 +228,8 @@ class AIServiceImpl(private val context: Context) {
         voice: String = DEFAULT_VOICE
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
+            checkApiKey("voice").onFailure { return@withContext Result.failure(it) }
+
             Log.d(TAG, "Synthesizing speech: text=$text, voice=$voice")
             
             val request = TTSRequest(

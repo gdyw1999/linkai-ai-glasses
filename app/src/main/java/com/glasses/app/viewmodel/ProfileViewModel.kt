@@ -247,11 +247,10 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
                     statusMessage = "API配置已保存",
                     showApiConfigDialog = false
                 )
-                
-                // 清除状态消息
-                kotlinx.coroutines.delay(1500)
-                _uiState.value = _uiState.value.copy(statusMessage = "")
-                
+
+                // 通知 LinkAIClient 重新加载最新 Key，立即生效
+                com.glasses.app.data.remote.api.LinkAIClient.reloadApiKey()
+
                 Log.d(TAG, "API configuration saved successfully")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to save API configuration", e)

@@ -11,6 +11,7 @@ import com.oudmon.ble.base.bluetooth.BleOperateManager
 import com.oudmon.ble.base.communication.LargeDataHandler
 import com.glasses.app.data.remote.sdk.BluetoothReceiver
 import com.glasses.app.data.remote.sdk.GlassesBluetoothCallback
+import com.glasses.app.util.AppLogger
 import com.glasses.app.util.CrashLogHelper
 import java.io.File
 import java.io.FileWriter
@@ -35,7 +36,14 @@ class GlassesApplication : Application() {
         super.onCreate()
         CONTEXT = this
 
-        // 注册全局崩溃日志处理器，将崩溃信息写入文件
+        // 初始化日志工具
+        AppLogger.init(this)
+        AppLogger.i("GlassesApplication", "App started")
+
+        // 初始化 LinkAI 客户端（动态 API Key 注入）
+        com.glasses.app.data.remote.api.LinkAIClient.init(this)
+
+        // 注册全局崩溃日志处理器
         setupCrashHandler()
     }
 

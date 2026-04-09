@@ -63,8 +63,8 @@ class MediaViewerTest {
     @Test
     fun testFormatDate() {
         // 测试特定时间戳
-        val timestamp = 1710576000000L // 2024-03-16 10:00:00
-        val formatted = formatDate(timestamp)
+        val createTime = 1710576000000L // 2024-03-16 10:00:00
+        val formatted = formatDate(createTime)
         
         // 验证格式正确（yyyy-MM-dd HH:mm）
         assertTrue(formatted.matches(Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}")))
@@ -81,8 +81,8 @@ class MediaViewerTest {
             fileName = "photo.jpg",
             filePath = "/path/to/photo.jpg",
             type = MediaType.IMAGE,
-            fileSize = 1024 * 1024,
-            timestamp = System.currentTimeMillis(),
+            size = 1024 * 1024,
+            createTime = System.currentTimeMillis(),
             duration = 0
         )
         
@@ -101,8 +101,8 @@ class MediaViewerTest {
             fileName = "video.mp4",
             filePath = "/path/to/video.mp4",
             type = MediaType.VIDEO,
-            fileSize = 10 * 1024 * 1024,
-            timestamp = System.currentTimeMillis(),
+            size = 10 * 1024 * 1024,
+            createTime = System.currentTimeMillis(),
             duration = 60000 // 60秒
         )
         
@@ -122,8 +122,8 @@ class MediaViewerTest {
             fileName = "recording.wav",
             filePath = "/path/to/recording.wav",
             type = MediaType.AUDIO,
-            fileSize = 2 * 1024 * 1024,
-            timestamp = System.currentTimeMillis(),
+            size = 2 * 1024 * 1024,
+            createTime = System.currentTimeMillis(),
             duration = 30000 // 30秒
         )
         
@@ -143,8 +143,8 @@ class MediaViewerTest {
             fileName = "test_media.jpg",
             filePath = "/path/to/test_media.jpg",
             type = MediaType.IMAGE,
-            fileSize = 1024 * 1024,
-            timestamp = System.currentTimeMillis(),
+            size = 1024 * 1024,
+            createTime = System.currentTimeMillis(),
             duration = 0
         )
         
@@ -153,8 +153,8 @@ class MediaViewerTest {
         assertNotNull(mediaFile.fileName)
         assertNotNull(mediaFile.filePath)
         assertNotNull(mediaFile.type)
-        assertTrue(mediaFile.fileSize > 0)
-        assertTrue(mediaFile.timestamp > 0)
+        assertTrue(mediaFile.size > 0)
+        assertTrue(mediaFile.createTime > 0)
     }
     
     /**
@@ -243,8 +243,8 @@ class MediaViewerTest {
             fileName = "test.jpg",
             filePath = "/storage/emulated/0/GlassesAlbum/test.jpg",
             type = MediaType.IMAGE,
-            fileSize = 1024,
-            timestamp = System.currentTimeMillis(),
+            size = 1024,
+            createTime = System.currentTimeMillis(),
             duration = 0
         )
         

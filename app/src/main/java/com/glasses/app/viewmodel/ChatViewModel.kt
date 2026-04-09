@@ -108,6 +108,14 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     private fun initializeChat() {
         viewModelScope.launch {
             try {
+                // 检查 API Key 配置
+                val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
+                if (!apiKeyManager.hasAllRequiredApiKeys()) {
+                    _uiState.value = _uiState.value.copy(
+                        statusMessage = "⚠️ 请先在「我的」→「API配置」中设置 LinkAI API Key"
+                    )
+                }
+
                 // 创建新会话
                 currentConversationId = conversationRepository.createConversation("新对话")
                 
