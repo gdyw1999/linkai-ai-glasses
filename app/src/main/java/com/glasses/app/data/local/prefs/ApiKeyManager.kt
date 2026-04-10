@@ -10,6 +10,7 @@ import android.content.SharedPreferences
  * 支持的API:
  * - LinkAI语音API (ASR + TTS)
  * - LinkAI对话API (LLM)
+ * - 阿里Qwen视觉API (图片识图)
  * - OpenClaw API (AI自动化代理引擎)
  */
 class ApiKeyManager private constructor(context: Context) {
@@ -18,6 +19,8 @@ class ApiKeyManager private constructor(context: Context) {
         private const val PREFS_NAME = "api_keys"
         private const val KEY_LINKAI_VOICE_API_KEY = "linkai_voice_api_key"
         private const val KEY_LINKAI_CHAT_API_KEY = "linkai_chat_api_key"
+        private const val KEY_ALI_QWEN_VISION_API_KEY = "ali_qwen_vision_api_key"
+        private const val KEY_ALI_QWEN_VISION_MODEL = "ali_qwen_vision_model"
         private const val KEY_OPENCLAW_API_KEY = "openclaw_api_key"
         private const val KEY_OPENCLAW_APP_ID = "openclaw_app_id"
         
@@ -79,6 +82,52 @@ class ApiKeyManager private constructor(context: Context) {
      */
     fun hasLinkAIChatApiKey(): Boolean {
         return getLinkAIChatApiKey().isNotEmpty()
+    }
+
+    // ==================== 阿里Qwen识图 ====================
+
+    /**
+     * 保存阿里Qwen识图 API Key
+     */
+    fun saveAliQwenVisionApiKey(apiKey: String) {
+        prefs.edit().putString(KEY_ALI_QWEN_VISION_API_KEY, apiKey).apply()
+    }
+
+    /**
+     * 获取阿里Qwen识图 API Key
+     */
+    fun getAliQwenVisionApiKey(): String {
+        return prefs.getString(KEY_ALI_QWEN_VISION_API_KEY, "") ?: ""
+    }
+
+    /**
+     * 检查是否已配置阿里Qwen识图 API Key
+     */
+    fun hasAliQwenVisionApiKey(): Boolean {
+        return getAliQwenVisionApiKey().isNotEmpty()
+    }
+
+    /**
+     * 保存阿里Qwen识图模型
+     */
+    fun saveAliQwenVisionModel(model: String) {
+        prefs.edit().putString(KEY_ALI_QWEN_VISION_MODEL, model).apply()
+    }
+
+    /**
+     * 获取阿里Qwen识图模型
+     */
+    fun getAliQwenVisionModel(): String {
+        val rawModel = prefs.getString(
+            KEY_ALI_QWEN_VISION_MODEL,
+            com.glasses.app.data.remote.api.model.AliQwenVisionModels.QWEN_36_PLUS
+        ) ?: com.glasses.app.data.remote.api.model.AliQwenVisionModels.QWEN_36_PLUS
+
+        return when (rawModel.lowercase()) {
+            "qwen3.6-plus-2026-04-02" -> com.glasses.app.data.remote.api.model.AliQwenVisionModels.QWEN_36_PLUS
+            "qwen3.5-flash" -> com.glasses.app.data.remote.api.model.AliQwenVisionModels.QWEN_35_FLASH
+            else -> rawModel
+        }
     }
     
     // ==================== OpenClaw API ====================

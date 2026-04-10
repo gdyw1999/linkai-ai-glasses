@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.glasses.app.data.remote.api.model.AliQwenVisionModels
 import com.glasses.app.viewmodel.ProfileViewModel
 import com.glasses.app.viewmodel.ProfileViewModelFactory
 
@@ -96,7 +97,7 @@ fun ProfileScreen(
             MenuItemCard(
                 icon = Icons.Default.Settings,
                 title = "API配置",
-                subtitle = "配置LinkAI和OpenClaw API Key",
+                subtitle = "配置LinkAI、阿里Qwen和OpenClaw API Key",
                 onClick = { viewModel.showApiConfig() }
             )
             
@@ -160,8 +161,8 @@ fun ProfileScreen(
     if (uiState.showApiConfigDialog) {
         ApiConfigDialog(
             onDismiss = { viewModel.hideApiConfig() },
-            onSave = { voiceKey, chatKey, openclawKey, openclawAppId ->
-                viewModel.saveApiConfig(voiceKey, chatKey, openclawKey, openclawAppId)
+            onSave = { voiceKey, chatKey, aliVisionKey, aliVisionModel, openclawKey, openclawAppId ->
+                viewModel.saveApiConfig(voiceKey, chatKey, aliVisionKey, aliVisionModel, openclawKey, openclawAppId)
             }
         )
     }
@@ -585,7 +586,7 @@ fun FAQItem(question: String, answer: String) {
 @Composable
 fun ApiConfigDialog(
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Unit
+    onSave: (String, String, String, String, String, String) -> Unit
 ) {
     val context = LocalContext.current
     val apiKeyManager = remember { com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context) }
@@ -593,6 +594,8 @@ fun ApiConfigDialog(
     // 加载已保存的API Keys
     var linkaiVoiceKey by remember { mutableStateOf(apiKeyManager.getLinkAIVoiceApiKey()) }
     var linkaiChatKey by remember { mutableStateOf(apiKeyManager.getLinkAIChatApiKey()) }
+    var aliQwenVisionKey by remember { mutableStateOf(apiKeyManager.getAliQwenVisionApiKey()) }
+    var aliQwenVisionModel by remember { mutableStateOf(apiKeyManager.getAliQwenVisionModel()) }
     var openclawKey by remember { mutableStateOf(apiKeyManager.getOpenClawApiKey()) }
     var openclawAppId by remember { mutableStateOf(apiKeyManager.getOpenClawAppId()) }
     
@@ -689,6 +692,56 @@ fun ApiConfigDialog(
                     singleLine = true,
                     shape = RoundedCornerShape(8.dp)
                 )
+
+                Divider(color = Color(0xFFE0E0E0))
+
+                // 阿里Qwen识图 API
+                Text(
+                    text = "阿里Qwen识图API",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = Color(0xFFFF6F00)
+                )
+
+                OutlinedTextField(
+                    value = aliQwenVisionKey,
+                    onValueChange = { aliQwenVisionKey = it },
+                    label = { Text("阿里API Key (DashScope)", fontSize = 12.sp) },
+                    placeholder = { Text("请输入阿里Qwen视觉API Key", fontSize = 12.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp)
+                )
+
+                Text(
+                    text = "阿里视觉模型",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF424242),
+                    fontSize = 12.sp
+                )
+
+                AliQwenVisionModels.all.forEach { model ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { aliQwenVisionModel = model }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = aliQwenVisionModel == model,
+                            onClick = { aliQwenVisionModel = model }
+                        )
+                        Text(
+                            text = model,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF424242),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
                 
                 Divider(color = Color(0xFFE0E0E0))
                 
@@ -743,7 +796,14 @@ fun ApiConfigDialog(
                 }
                 Button(
                     onClick = {
-                        onSave(linkaiVoiceKey, linkaiChatKey, openclawKey, openclawAppId)
+                        onSave(
+                            linkaiVoiceKey,
+                            linkaiChatKey,
+                            aliQwenVisionKey,
+                            aliQwenVisionModel,
+                            openclawKey,
+                            openclawAppId
+                        )
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF2196F3)

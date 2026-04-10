@@ -2,6 +2,35 @@
 
 All notable changes to the Linkai星韵AI眼镜Android App project will be documented in this file.
 
+## [1.3.0] - 2026-04-11
+
+### Changed - 智能识图链路调整
+
+- **智能识图切换到阿里 DashScope Qwen**
+  - 首页“智能识图”不再走 LinkAI 图像识别链路，改为调用阿里 DashScope OpenAI 兼容接口
+  - 本地图片读取后转为 `data:image/...;base64,...`，直接发送给视觉模型，无需额外图片上传服务
+  - 当前支持模型：
+    - `qwen3.6-plus-2026-04-02`
+    - `qwen3.5-flash`
+
+- **识图流程完善**
+  - Home 页流程调整为：拍照 -> 同步最新图片 -> 阿里 Qwen 识图 -> 结果写入 AI 对话页
+  - 识图结果统一使用提示词前缀：`图片识别：`
+  - 新增识图结果中转仓库，确保从首页触发后可在 AI 对话页查看识别结果
+
+### Added - 配置能力扩展
+
+- **API配置新增阿里Qwen识图配置**
+  - 新增 DashScope API Key 配置项
+  - 新增视觉模型选择项
+  - 保留 LinkAI 语音 / 对话 Key 配置，用于原有语音对话能力
+
+### Documentation
+
+- 更新 `README.md`
+- 更新 `docs/API配置功能说明.md`
+- 更新 `docs/集成状态报告.md`
+
 ## [1.2.0] - 2026-04-09
 
 ### Added - 新功能

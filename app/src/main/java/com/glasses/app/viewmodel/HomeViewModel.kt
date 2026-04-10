@@ -6,20 +6,32 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.glasses.app.GlassesApplication
+import com.glasses.app.data.local.media.MediaType
+import com.glasses.app.data.local.prefs.ApiKeyManager
+import com.glasses.app.data.remote.api.AIServiceImpl
 import com.glasses.app.data.remote.sdk.ConnectionState
 import com.glasses.app.data.remote.sdk.GlassesSDKManager
 import com.glasses.app.data.remote.sdk.MediaCaptureManager
 import com.glasses.app.data.remote.sdk.MediaCaptureState
+import com.glasses.app.data.remote.sdk.MediaSyncManager
 import com.glasses.app.data.remote.sdk.ScannedDevice
+import com.glasses.app.data.repository.SmartRecognitionRepository
+import com.glasses.app.data.repository.SmartRecognitionResult
 import com.glasses.app.service.GlassesConnectionService
 import com.glasses.app.util.BatteryOptimizationHelper
 import com.glasses.app.util.HuaweiProtectedAppsHelper
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
+import kotlin.coroutines.resume
 
 /**
  * 首页UI状态
@@ -30,6 +42,7 @@ data class HomeUiState(
     val batteryLevel: Int = 0,
     val isScanning: Boolean = false,
     val isRecording: Boolean = false,
+    val captureState: MediaCaptureState = MediaCaptureState.IDLE,
     val recordingDuration: Long = 0L,
     val statusMessage: String = "",
     val isLoading: Boolean = false,
@@ -43,6 +56,9 @@ class HomeViewModel(private val context: Context) : ViewModel() {
     
     companion object {
         private const val TAG = "HomeViewModel"
+        private const val ALBUM_DIR_NAME = "GlassesAlbum"
+        private const val IMAGE_RECOGNITION_PROMPT = "识别图片内容，输出开头使用：“图片识别：xxxxxxx”"
+        private const val SYNC_WAIT_TIMEOUT_MS = 20_000L
     }
     
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -54,7 +70,14 @@ class HomeViewModel(private val context: Context) : ViewModel() {
     
     private var sdkManager: GlassesSDKManager? = null
     private var mediaCaptureManager: MediaCaptureManager? = null
+    private var mediaSyncManager: MediaSyncManager? = null
     private var scanJob: Job? = null
+    private val apiKeyManager by lazy { ApiKeyManager.getInstance(context) }
+    private val aiService by lazy { AIServiceImpl.getInstance(context) }
+    private val smartRecognitionRepository by lazy { SmartRecognitionRepository.getInstance(context) }
+    private val albumDirPath: String by lazy {
+        File(context.getExternalFilesDir(null), ALBUM_DIR_NAME).absolutePath
+    }
     
     // 充电状态 - 延迟初始化
     val isCharging: StateFlow<Boolean> by lazy {
@@ -69,6 +92,8 @@ class HomeViewModel(private val context: Context) : ViewModel() {
         try {
             sdkManager = GlassesSDKManager.getInstance(context)
             mediaCaptureManager = MediaCaptureManager.getInstance(context)
+            mediaSyncManager = MediaSyncManager.getInstance(context)
+            initializeMediaSync()
 
             // 监听连接状态
             viewModelScope.launch {
@@ -81,6 +106,35 @@ class HomeViewModel(private val context: Context) : ViewModel() {
             viewModelScope.launch {
                 sdkManager?.batteryLevel?.collect { level ->
                     _uiState.value = _uiState.value.copy(batteryLevel = level)
+                }
+            }
+
+            // 监听媒体采集状态（统一监听，避免重复 collect）
+            viewModelScope.launch {
+                mediaCaptureManager?.status?.collect { status ->
+                    val isRecording =
+                        status.state == MediaCaptureState.RECORDING_VIDEO ||
+                        status.state == MediaCaptureState.RECORDING_AUDIO
+                    val autoStatusMessage = when (status.state) {
+                        MediaCaptureState.RECORDING_VIDEO -> "录像中..."
+                        MediaCaptureState.RECORDING_AUDIO -> "录音中..."
+                        MediaCaptureState.AI_RECOGNITION -> "智能识图中..."
+                        MediaCaptureState.IDLE -> null
+                    }
+                    val currentMessage = _uiState.value.statusMessage
+                    val shouldClearAutoMessage = status.state == MediaCaptureState.IDLE &&
+                        currentMessage in setOf("录像中...", "录音中...", "智能识图中...")
+
+                    _uiState.value = _uiState.value.copy(
+                        isRecording = isRecording,
+                        captureState = status.state,
+                        recordingDuration = if (isRecording) status.recordingDuration else 0L,
+                        statusMessage = when {
+                            autoStatusMessage != null -> autoStatusMessage
+                            shouldClearAutoMessage -> ""
+                            else -> currentMessage
+                        }
+                    )
                 }
             }
         } catch (e: Exception) {
@@ -280,6 +334,19 @@ class HomeViewModel(private val context: Context) : ViewModel() {
         val level = sdkManager?.getBatteryLevel() ?: 0
         Log.d(TAG, "Current battery level: $level%")
     }
+
+    /**
+     * 初始化媒体同步模块，用于识图后读取最新照片
+     */
+    private fun initializeMediaSync() {
+        mediaSyncManager?.initSync(albumDirPath) { success, message ->
+            if (success) {
+                Log.d(TAG, "Media sync initialized: $albumDirPath")
+            } else {
+                Log.e(TAG, "Media sync init failed: $message")
+            }
+        }
+    }
     
     /**
      * 拍照
@@ -295,27 +362,21 @@ class HomeViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 开始录像 - 集成 MediaCaptureManager，监听录制时长
+     * 开始录像
      */
     fun startVideo() {
         if (!_uiState.value.isConnected) {
             _uiState.value = _uiState.value.copy(statusMessage = "请先连接眼镜")
             return
         }
+        if (_uiState.value.captureState == MediaCaptureState.RECORDING_AUDIO) {
+            _uiState.value = _uiState.value.copy(statusMessage = "请先停止录音")
+            return
+        }
         _uiState.value = _uiState.value.copy(statusMessage = "正在开始录像...")
         mediaCaptureManager?.startVideo { success, message ->
-            if (success) {
-                viewModelScope.launch {
-                    mediaCaptureManager?.status?.collect { status ->
-                        _uiState.value = _uiState.value.copy(
-                            isRecording = status.state == MediaCaptureState.RECORDING_VIDEO,
-                            recordingDuration = status.recordingDuration,
-                            statusMessage = if (status.state == MediaCaptureState.RECORDING_VIDEO) "录像中..." else ""
-                        )
-                    }
-                }
-            } else {
-                _uiState.value = _uiState.value.copy(isRecording = false, statusMessage = message)
+            if (!success) {
+                _uiState.value = _uiState.value.copy(statusMessage = message)
             }
         }
     }
@@ -333,27 +394,21 @@ class HomeViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 开始录音 - 集成 MediaCaptureManager，监听录制时长
+     * 开始录音
      */
     fun startAudio() {
         if (!_uiState.value.isConnected) {
             _uiState.value = _uiState.value.copy(statusMessage = "请先连接眼镜")
             return
         }
+        if (_uiState.value.captureState == MediaCaptureState.RECORDING_VIDEO) {
+            _uiState.value = _uiState.value.copy(statusMessage = "请先停止录像")
+            return
+        }
         _uiState.value = _uiState.value.copy(statusMessage = "正在开始录音...")
         mediaCaptureManager?.startAudio { success, message ->
-            if (success) {
-                viewModelScope.launch {
-                    mediaCaptureManager?.status?.collect { status ->
-                        _uiState.value = _uiState.value.copy(
-                            isRecording = status.state == MediaCaptureState.RECORDING_AUDIO,
-                            recordingDuration = status.recordingDuration,
-                            statusMessage = if (status.state == MediaCaptureState.RECORDING_AUDIO) "录音中..." else ""
-                        )
-                    }
-                }
-            } else {
-                _uiState.value = _uiState.value.copy(isRecording = false, statusMessage = message)
+            if (!success) {
+                _uiState.value = _uiState.value.copy(statusMessage = message)
             }
         }
     }
@@ -374,13 +429,157 @@ class HomeViewModel(private val context: Context) : ViewModel() {
      * 开始智能识图
      */
     fun startAIRecognition() {
-        _uiState.value = _uiState.value.copy(isLoading = true, statusMessage = "正在启动智能识图...")
-        mediaCaptureManager?.startAIRecognition { success, message ->
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                statusMessage = message
-            )
+        if (!_uiState.value.isConnected) {
+            _uiState.value = _uiState.value.copy(statusMessage = "请先连接眼镜")
+            return
         }
+        if (!apiKeyManager.hasAliQwenVisionApiKey()) {
+            _uiState.value = _uiState.value.copy(statusMessage = "请先在「我的」→「API配置」设置阿里Qwen识图 API Key")
+            return
+        }
+        if (_uiState.value.isLoading) {
+            _uiState.value = _uiState.value.copy(statusMessage = "任务执行中，请稍候")
+            return
+        }
+        if (_uiState.value.captureState != MediaCaptureState.IDLE) {
+            _uiState.value = _uiState.value.copy(statusMessage = "请先停止当前采集任务")
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, statusMessage = "正在拍照...")
+            try {
+                val photoResult = takePhotoSuspend()
+                if (!photoResult.first) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        statusMessage = "拍照失败: ${photoResult.second}"
+                    )
+                    return@launch
+                }
+
+                _uiState.value = _uiState.value.copy(statusMessage = "拍照成功，正在同步图片...")
+                val imagePath = syncAndGetLatestImagePath()
+                if (imagePath.isNullOrEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        statusMessage = "未找到可识别的图片，请先在相册同步后重试"
+                    )
+                    return@launch
+                }
+
+                val selectedModel = apiKeyManager.getAliQwenVisionModel()
+                _uiState.value = _uiState.value.copy(statusMessage = "正在智能识图...")
+
+                val recognitionResult = aiService.recognizeImage(
+                    imagePath = imagePath,
+                    sessionId = "vision_${System.currentTimeMillis()}",
+                    question = IMAGE_RECOGNITION_PROMPT,
+                    model = selectedModel
+                )
+
+                if (recognitionResult.isFailure) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        statusMessage = "识图失败: ${recognitionResult.exceptionOrNull()?.message}"
+                    )
+                    return@launch
+                }
+
+                val answer = recognitionResult.getOrNull().orEmpty()
+                smartRecognitionRepository.publish(
+                    SmartRecognitionResult(
+                        imagePath = imagePath,
+                        model = selectedModel,
+                        question = IMAGE_RECOGNITION_PROMPT,
+                        answer = answer
+                    )
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    statusMessage = "识图完成，结果已发送到 AI 对话页"
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Smart recognition failed", e)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    statusMessage = "识图失败: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private suspend fun takePhotoSuspend(): Pair<Boolean, String> {
+        return suspendCancellableCoroutine { continuation ->
+            val captureManager = mediaCaptureManager
+            if (captureManager == null) {
+                continuation.resume(false to "媒体模块未初始化")
+                return@suspendCancellableCoroutine
+            }
+            captureManager.takePhoto { success, message ->
+                if (continuation.isActive) {
+                    continuation.resume(success to message)
+                }
+            }
+        }
+    }
+
+    private suspend fun startSyncSuspend(): Pair<Boolean, String> {
+        return suspendCancellableCoroutine { continuation ->
+            val syncManager = mediaSyncManager
+            if (syncManager == null) {
+                continuation.resume(false to "媒体同步模块未初始化")
+                return@suspendCancellableCoroutine
+            }
+            syncManager.startSync { success, message ->
+                if (continuation.isActive) {
+                    continuation.resume(success to message)
+                }
+            }
+        }
+    }
+
+    private suspend fun syncAndGetLatestImagePath(): String? {
+        val latestBefore = getLatestImagePath()
+        val syncStartResult = startSyncSuspend()
+        if (!syncStartResult.first) {
+            Log.w(TAG, "Start sync failed, fallback to local image: ${syncStartResult.second}")
+            return latestBefore ?: getLatestImagePath()
+        }
+
+        // 轮询等待新图片同步完成，超时后返回最新可用图片
+        return withTimeoutOrNull<String?>(SYNC_WAIT_TIMEOUT_MS) {
+            while (true) {
+                val latest = getLatestImagePath()
+                if (!latest.isNullOrEmpty() && latest != latestBefore) {
+                    return@withTimeoutOrNull latest
+                }
+                delay(500)
+            }
+            @Suppress("UNREACHABLE_CODE") null // while(true) 不会执行到此处，仅满足类型推断
+        } ?: getLatestImagePath()
+    }
+
+    private suspend fun getLatestImagePath(): String? = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val syncImagePath = mediaSyncManager?.mediaFiles
+            ?.value
+            ?.firstOrNull { it.type == MediaType.IMAGE && File(it.filePath).exists() }
+            ?.filePath
+        if (!syncImagePath.isNullOrEmpty()) {
+            return@withContext syncImagePath
+        }
+
+        val albumDir = File(albumDirPath)
+        if (!albumDir.exists() || !albumDir.isDirectory) {
+            return@withContext null
+        }
+
+        albumDir.listFiles()
+            ?.filter { file ->
+                file.isFile && file.extension.lowercase() in setOf("jpg", "jpeg", "png")
+            }
+            ?.maxByOrNull { it.lastModified() }
+            ?.absolutePath
     }
     
     override fun onCleared() {

@@ -156,3 +156,13 @@ data class Error(
     @SerializedName("type")
     val type: String
 )
+
+/**
+ * 阿里 Qwen 视觉模型选项
+ */
+object AliQwenVisionModels {
+    const val QWEN_36_PLUS = "qwen3.6-plus-2026-04-02"
+    const val QWEN_35_FLASH = "qwen3.5-flash"
+
+    val all = listOf(QWEN_36_PLUS, QWEN_35_FLASH)
+}

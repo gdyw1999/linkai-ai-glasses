@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.glasses.app.data.remote.sdk.MediaCaptureState
 import com.glasses.app.viewmodel.HomeViewModel
 import com.glasses.app.viewmodel.HomeViewModelFactory
 
@@ -92,7 +93,7 @@ fun HomeScreen(
             // 功能按钮网格
             QuickActionGrid(
                 isConnected = uiState.isConnected,
-                isRecording = uiState.isRecording,
+                captureState = uiState.captureState,
                 onTakePhoto = { viewModel.takePhoto() },
                 onStartVideo = { viewModel.startVideo() },
                 onStopVideo = { viewModel.stopVideo() },
@@ -384,7 +385,7 @@ fun ConnectionStatusCard(
 @Composable
 fun QuickActionGrid(
     isConnected: Boolean,
-    isRecording: Boolean,
+    captureState: MediaCaptureState,
     onTakePhoto: () -> Unit,
     onStartVideo: () -> Unit,
     onStopVideo: () -> Unit,
@@ -392,6 +393,10 @@ fun QuickActionGrid(
     onStopAudio: () -> Unit,
     onAIRecognition: () -> Unit
 ) {
+    val isVideoRecording = captureState == MediaCaptureState.RECORDING_VIDEO
+    val isAudioRecording = captureState == MediaCaptureState.RECORDING_AUDIO
+    val canStartNewCapture = captureState == MediaCaptureState.IDLE
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -412,10 +417,10 @@ fun QuickActionGrid(
             
             QuickActionButton(
                 icon = Icons.Default.PlayArrow,
-                label = if (isRecording) "停止录像" else "录像",
-                enabled = isConnected,
-                onClick = if (isRecording) onStopVideo else onStartVideo,
-                isActive = isRecording,
+                label = if (isVideoRecording) "停止录像" else "录像",
+                enabled = isConnected && (isVideoRecording || canStartNewCapture),
+                onClick = if (isVideoRecording) onStopVideo else onStartVideo,
+                isActive = isVideoRecording,
                 backgroundColor = Color(0xFFFF5722),
                 modifier = Modifier.weight(1f)
             )
@@ -428,9 +433,10 @@ fun QuickActionGrid(
         ) {
             QuickActionButton(
                 icon = Icons.Default.Settings,
-                label = "录音",
-                enabled = isConnected,
-                onClick = onStartAudio,
+                label = if (isAudioRecording) "停止录音" else "录音",
+                enabled = isConnected && (isAudioRecording || canStartNewCapture),
+                onClick = if (isAudioRecording) onStopAudio else onStartAudio,
+                isActive = isAudioRecording,
                 backgroundColor = Color(0xFF9C27B0),
                 modifier = Modifier.weight(1f)
             )
@@ -438,7 +444,7 @@ fun QuickActionGrid(
             QuickActionButton(
                 icon = Icons.Default.Star,
                 label = "智能识图",
-                enabled = isConnected,
+                enabled = isConnected && canStartNewCapture,
                 onClick = onAIRecognition,
                 backgroundColor = Color(0xFF4CAF50),
                 modifier = Modifier.weight(1f)

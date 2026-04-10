@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.glasses.app.data.remote.api.AIServiceImpl
 import com.glasses.app.data.repository.ConversationRepository
+import com.glasses.app.data.repository.SmartRecognitionRepository
+import com.glasses.app.data.repository.SmartRecognitionResult
 import com.glasses.app.domain.usecase.StreamingChatManager
 import com.glasses.app.manager.AudioPlayer
 import com.glasses.app.manager.RecordingManager
@@ -72,6 +74,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     private val recordingManager = RecordingManager.getInstance(context)
     private val aiService = AIServiceImpl.getInstance(context)
     private val conversationRepository = ConversationRepository.getInstance(context)
+    private val smartRecognitionRepository = SmartRecognitionRepository.getInstance(context)
     private val audioPlayer = AudioPlayer.getInstance(context)
     private lateinit var streamingChatManager: StreamingChatManager
     
@@ -112,7 +115,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                 val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
                 if (!apiKeyManager.hasAllRequiredApiKeys()) {
                     _uiState.value = _uiState.value.copy(
-                        statusMessage = "⚠️ 请先在「我的」→「API配置」中设置 LinkAI API Key"
+                        statusMessage = "⚠️ 未配置LinkAI语音/对话 Key，语音对话不可用（智能识图不受影响）"
                     )
                 }
 
@@ -132,6 +135,15 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                     streamingChatManager.displayText.collect { text ->
                         if (text.isNotEmpty()) {
                             updateAIMessage(text)
+                        }
+                    }
+                }
+
+                // 监听首页智能识图结果，自动注入当前会话
+                viewModelScope.launch {
+                    smartRecognitionRepository.pendingResult.collect { result ->
+                        if (result != null) {
+                            consumeSmartRecognitionResult(result)
                         }
                     }
                 }
@@ -316,22 +328,36 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         currentMessages.add(message)
         _uiState.value = _uiState.value.copy(messages = currentMessages)
     }
+
+    /**
+     * 添加AI消息（非流式）
+     */
+    private fun addAssistantMessage(content: String) {
+        val message = Message(
+            id = System.currentTimeMillis().toString(),
+            content = content,
+            isUser = false,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val currentMessages = _uiState.value.messages.toMutableList()
+        currentMessages.add(message)
+        _uiState.value = _uiState.value.copy(messages = currentMessages)
+    }
     
     /**
      * 更新AI消息（流式更新）
      */
     private fun updateAIMessage(content: String) {
         val currentMessages = _uiState.value.messages.toMutableList()
-        
-        // 查找最后一条AI消息
-        val lastAIMessageIndex = currentMessages.indexOfLast { !it.isUser }
-        
-        if (lastAIMessageIndex >= 0) {
-            // 更新现有AI消息
-            val updatedMessage = currentMessages[lastAIMessageIndex].copy(content = content)
-            currentMessages[lastAIMessageIndex] = updatedMessage
+
+        // 仅在最后一条本身就是AI消息时做流式覆盖，避免误改历史消息
+        val lastMessage = currentMessages.lastOrNull()
+        if (lastMessage != null && !lastMessage.isUser) {
+            val lastIndex = currentMessages.lastIndex
+            val updatedMessage = currentMessages[lastIndex].copy(content = content)
+            currentMessages[lastIndex] = updatedMessage
         } else {
-            // 添加新的AI消息
             val message = Message(
                 id = System.currentTimeMillis().toString(),
                 content = content,
@@ -545,6 +571,48 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                     statusMessage = "删除会话失败: ${e.message}"
                 )
             }
+        }
+    }
+
+    /**
+     * 消费首页智能识图结果并写入当前对话
+     */
+    private suspend fun consumeSmartRecognitionResult(result: SmartRecognitionResult) {
+        try {
+            if (currentConversationId == 0L) {
+                currentConversationId = conversationRepository.createConversation("智能识图")
+                _uiState.value = _uiState.value.copy(
+                    currentConversationId = currentConversationId,
+                    conversationTitle = "智能识图"
+                )
+            }
+
+            addUserMessage(result.question)
+            addAssistantMessage(result.answer)
+
+            conversationRepository.addMessage(
+                conversationId = currentConversationId,
+                content = result.question,
+                role = "user"
+            )
+            conversationRepository.addMessage(
+                conversationId = currentConversationId,
+                content = result.answer,
+                role = "assistant"
+            )
+
+            _uiState.value = _uiState.value.copy(
+                statusMessage = "已接收首页智能识图结果（模型：${result.model}）"
+            )
+
+            Log.d(TAG, "Smart recognition result consumed: ${result.id}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to consume smart recognition result", e)
+            _uiState.value = _uiState.value.copy(
+                statusMessage = "识图结果写入失败: ${e.message}"
+            )
+        } finally {
+            smartRecognitionRepository.clear(result.id)
         }
     }
     

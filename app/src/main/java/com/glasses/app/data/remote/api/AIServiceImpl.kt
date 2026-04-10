@@ -1,7 +1,10 @@
 package com.glasses.app.data.remote.api
 
 import android.content.Context
+import android.util.Base64
 import android.util.Log
+import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.glasses.app.data.remote.api.model.ChatRequest
 import com.glasses.app.data.remote.api.model.ChatResponse
 import com.glasses.app.data.remote.api.model.TTSRequest
@@ -11,7 +14,11 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 import java.io.File
 
 /**
@@ -25,6 +32,8 @@ class AIServiceImpl(private val context: Context) {
         
         // 默认音色（适合流式输出）
         private const val DEFAULT_VOICE = "BV700_V2_streaming"
+        private const val DEFAULT_IMAGE_RECOGNITION_PROMPT = "识别图片内容，输出开头使用：“图片识别：xxxxxxx”"
+        private const val ALI_QWEN_VISION_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
         
         @Volatile
         private var instance: AIServiceImpl? = null
@@ -37,21 +46,21 @@ class AIServiceImpl(private val context: Context) {
     }
     
     private val apiService = LinkAIClient.apiService
+    private val gson = Gson()
+    private val aliVisionClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(90, TimeUnit.SECONDS)
+        .build()
 
-    /**
-     * 获取当前语音 API Key（ASR/TTS 专用）
-     */
-    private fun getVoiceApiKey(): String {
+    private fun getAliVisionApiKey(): String {
         val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
-        return apiKeyManager.getLinkAIVoiceApiKey()
+        return apiKeyManager.getAliQwenVisionApiKey()
     }
 
-    /**
-     * 获取当前对话 API Key（LLM 专用）
-     */
-    private fun getChatApiKey(): String {
+    private fun getAliVisionModel(): String {
         val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
-        return apiKeyManager.getLinkAIChatApiKey()
+        return apiKeyManager.getAliQwenVisionModel()
     }
 
     /**
@@ -63,6 +72,12 @@ class AIServiceImpl(private val context: Context) {
                      else apiKeyManager.hasLinkAIVoiceApiKey()
         return if (hasKey) Result.success(Unit)
                else Result.failure(Exception("请先在「我的」→「API配置」中设置 LinkAI ${if (type == "chat") "对话" else "语音"} API Key"))
+    }
+
+    private fun checkAliVisionApiKey(): Result<Unit> {
+        val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
+        return if (apiKeyManager.hasAliQwenVisionApiKey()) Result.success(Unit)
+        else Result.failure(Exception("请先在「我的」→「API配置」中设置阿里Qwen识图 API Key"))
     }
     
     /**
@@ -143,6 +158,147 @@ class AIServiceImpl(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Chat error", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * 图像识别（本地图片）
+     * 使用阿里Qwen视觉模型（OpenAI兼容接口）
+     */
+    suspend fun recognizeImage(
+        imagePath: String,
+        sessionId: String,
+        question: String = DEFAULT_IMAGE_RECOGNITION_PROMPT,
+        appCode: String? = null,
+        model: String? = null
+    ): Result<String> {
+        return recognizeImage(
+            imageFile = File(imagePath),
+            sessionId = sessionId,
+            question = question,
+            appCode = appCode,
+            model = model
+        )
+    }
+
+    /**
+     * 图像识别（文件）
+     */
+    suspend fun recognizeImage(
+        imageFile: File,
+        sessionId: String,
+        question: String = DEFAULT_IMAGE_RECOGNITION_PROMPT,
+        appCode: String? = null,
+        model: String? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            checkAliVisionApiKey().onFailure { return@withContext Result.failure(it) }
+
+            if (!imageFile.exists()) {
+                return@withContext Result.failure(Exception("图片不存在: ${imageFile.absolutePath}"))
+            }
+
+            @Suppress("UNUSED_VARIABLE")
+            val ignoredSessionId = sessionId
+            @Suppress("UNUSED_VARIABLE")
+            val ignoredAppCode = appCode
+
+            val imageDataUrl = buildImageDataUrl(imageFile)
+            val finalModel = model ?: getAliVisionModel()
+            val requestPayload = mapOf(
+                "model" to finalModel,
+                "messages" to listOf(
+                    mapOf(
+                        "role" to "user",
+                        "content" to listOf(
+                            mapOf(
+                                "type" to "text",
+                                "text" to question
+                            ),
+                            mapOf(
+                                "type" to "image_url",
+                                "image_url" to mapOf(
+                                    "url" to imageDataUrl,
+                                    "detail" to "high"
+                                )
+                            )
+                        )
+                    )
+                ),
+                "stream" to false
+            )
+
+            val requestBody = gson.toJson(requestPayload)
+                .toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+            val request = Request.Builder()
+                .url(ALI_QWEN_VISION_ENDPOINT)
+                .header("Authorization", "Bearer ${getAliVisionApiKey()}")
+                .header("Content-Type", "application/json")
+                .post(requestBody)
+                .build()
+
+            Log.d(TAG, "Sending Ali Qwen vision request: model=$finalModel")
+            aliVisionClient.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val message = if (responseBody.isNotBlank()) {
+                        "阿里Qwen识图失败: ${response.code} - $responseBody"
+                    } else {
+                        "阿里Qwen识图失败: ${response.code} - ${response.message}"
+                    }
+                    Log.e(TAG, message)
+                    return@withContext Result.failure(Exception(message))
+                }
+
+                val content = parseAliVisionContent(responseBody)
+                if (content.isBlank()) {
+                    return@withContext Result.failure(Exception("识图结果为空"))
+                }
+                return@withContext Result.success(content)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ali Qwen image recognition error", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun parseAliVisionContent(responseBody: String): String {
+        if (responseBody.isBlank()) return ""
+
+        return try {
+            val root = JsonParser().parse(responseBody).asJsonObject
+            val choices = root.getAsJsonArray("choices")
+            if (choices == null || choices.size() == 0) return ""
+
+            val firstChoice = choices.get(0).asJsonObject
+            val messageObj = firstChoice.getAsJsonObject("message")
+            val contentElement = messageObj?.get("content") ?: return ""
+
+            when {
+                contentElement.isJsonPrimitive -> contentElement.asString
+                contentElement.isJsonArray -> {
+                    val array = contentElement.asJsonArray
+                    buildString {
+                        for (i in 0 until array.size()) {
+                            val item = array.get(i)
+                            val obj = item.asJsonObject
+                            val text = when {
+                                obj.has("text") -> obj.get("text").asString
+                                obj.has("content") -> obj.get("content").asString
+                                else -> null
+                            }
+                            if (text != null) {
+                                if (isNotEmpty()) append("\n")
+                                append(text)
+                            }
+                        }
+                    }.trim()
+                }
+                else -> ""
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse Ali vision response", e)
+            ""
         }
     }
 
@@ -324,6 +480,21 @@ class AIServiceImpl(private val context: Context) {
             Log.e(TAG, "Voice input processing error", e)
             emit(ChatState.Error(e.message ?: "未知错误"))
         }
+    }
+
+    /**
+     * 构建 data:image/...;base64 URL，便于直接上传本地图片
+     */
+    private fun buildImageDataUrl(imageFile: File): String {
+        val mimeType = when (imageFile.extension.lowercase()) {
+            "png" -> "png"
+            "jpg", "jpeg" -> "jpeg"
+            "webp" -> "webp"
+            else -> "jpeg"
+        }
+        val bytes = imageFile.readBytes()
+        val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+        return "data:image/$mimeType;base64,$base64"
     }
 }
 

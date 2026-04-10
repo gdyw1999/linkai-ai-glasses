@@ -41,7 +41,7 @@
 | **图片加载** | Coil |
 | **权限管理** | 原生ActivityCompat |
 | **蓝牙SDK** | 青橙SDK (LIB_GLASSES_SDK-release.aar) |
-| **AI服务** | LinkAI API (ASR + LLM + TTS) |
+| **AI服务** | LinkAI API（语音对话） + 阿里 DashScope Qwen（智能识图） |
 
 ---
 
@@ -84,8 +84,8 @@ app/src/main/java/com/glasses/app/
 | 模块 | 功能 |
 |------|------|
 | **设备连接** | 蓝牙扫描、连接、断开、电量查询 |
-| **媒体采集** | 拍照、录像、录音、智能识图 |
-| **AI对话** | 语音识别、对话生成、语音合成、会话管理 |
+| **媒体采集** | 拍照、录像、录音、智能识图（拍照后自动识别） |
+| **AI对话** | 语音识别、对话生成、语音合成、会话管理、识图结果展示 |
 | **媒体管理** | WiFi同步、相册浏览 |
 
 ---
@@ -143,6 +143,34 @@ cd linkai-ai-glasses
 
 ---
 
+## AI能力说明
+
+### 语音对话
+
+- 使用 LinkAI 语音 API：ASR（语音识别）+ TTS（语音合成）
+- 使用 LinkAI 对话 API：LLM 流式对话
+
+### 智能识图
+
+- 首页点击“智能识图”后，流程为：拍照 -> WiFi同步最新图片 -> 本地图片转 Base64 Data URL -> 调用阿里 DashScope Qwen 视觉模型 -> 结果写入 AI 对话页
+- 当前支持模型：
+  - `qwen3.6-plus-2026-04-02`
+  - `qwen3.5-flash`
+- 当前识图提示词固定为：
+  - `识别图片内容，输出开头使用：“图片识别：xxxxxxx”`
+
+### API配置
+
+在“我的 -> API配置”中支持以下配置项：
+
+- LinkAI语音 API Key
+- LinkAI对话 API Key
+- 阿里Qwen识图 API Key（DashScope）
+- 阿里Qwen识图模型
+- OpenClaw API Key / 应用ID（预留）
+
+---
+
 ## 参考文档
 
 | 文档 | 路径 |
@@ -171,6 +199,7 @@ cd linkai-ai-glasses
 | v1.0.0 | 2026-03-17 | 初次提交，基础架构搭建 |
 | v1.1.0 | 2026-04-09 | 修复鸿蒙兼容性崩溃、集成全部后端模块、接入SDK媒体控制 |
 | v1.2.0 | 2026-04-09 | API Key动态配置、日志系统（AppLogger）、媒体采集实时状态 |
+| v1.3.0 | 2026-04-11 | 智能识图切换为阿里Qwen Base64方案，支持模型选择与结果写入AI对话页 |
 
 ---
 

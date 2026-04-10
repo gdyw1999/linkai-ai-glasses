@@ -222,6 +222,8 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
     fun saveApiConfig(
         linkaiVoiceKey: String,
         linkaiChatKey: String,
+        aliQwenVisionKey: String,
+        aliQwenVisionModel: String,
         openclawKey: String,
         openclawAppId: String
     ) {
@@ -235,6 +237,12 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
                 }
                 if (linkaiChatKey.isNotEmpty()) {
                     apiKeyManager.saveLinkAIChatApiKey(linkaiChatKey)
+                }
+                if (aliQwenVisionKey.isNotEmpty()) {
+                    apiKeyManager.saveAliQwenVisionApiKey(aliQwenVisionKey)
+                }
+                if (aliQwenVisionModel.isNotEmpty()) {
+                    apiKeyManager.saveAliQwenVisionModel(aliQwenVisionModel)
                 }
                 if (openclawKey.isNotEmpty()) {
                     apiKeyManager.saveOpenClawApiKey(openclawKey)
