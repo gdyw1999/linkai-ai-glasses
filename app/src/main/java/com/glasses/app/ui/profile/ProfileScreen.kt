@@ -1,5 +1,6 @@
 package com.glasses.app.ui.profile
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,10 +18,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.glasses.app.R
 import com.glasses.app.data.remote.api.model.AliQwenVisionModels
 import com.glasses.app.viewmodel.ProfileViewModel
 import com.glasses.app.viewmodel.ProfileViewModelFactory
@@ -130,6 +133,24 @@ fun ProfileScreen(
                 onClick = { viewModel.disconnect() },
                 isDestructive = true
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            MenuItemCard(
+                icon = Icons.Default.Settings,
+                title = "备份配置",
+                subtitle = "导出API Keys和对话历史到文件",
+                onClick = { viewModel.showBackupDialog() }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            MenuItemCard(
+                icon = Icons.Default.Refresh,
+                title = "恢复配置",
+                subtitle = "从备份文件恢复API Keys和对话历史",
+                onClick = { viewModel.showBackupDialog() }
+            )
             
             Spacer(modifier = Modifier.height(24.dp))
             
@@ -173,6 +194,46 @@ fun ProfileScreen(
     if (uiState.showCrashLogDialog) {
         CrashLogDialog(
             onDismiss = { viewModel.hideCrashLog() }
+        )
+    }
+
+    // 备份/恢复对话框
+    if (uiState.showBackupDialog) {
+        val activityContext = LocalContext.current
+        BackupRestoreDialog(
+            isExporting = uiState.isExporting,
+            isImporting = uiState.isImporting,
+            onDismiss = { viewModel.hideBackupDialog() },
+            onExport = { json, uri ->
+                // 保存到用户选择的 URI（IO 操作在 dialog 内处理）
+                kotlinx.coroutines.runBlocking {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val outputStream = activityContext.contentResolver.openOutputStream(uri)
+                            outputStream?.write(json.toByteArray())
+                            outputStream?.close()
+                        } catch (e: Exception) {
+                            Log.e("ProfileScreen", "Failed to write backup file", e)
+                        }
+                    }
+                }
+            },
+            onImport = { uri ->
+                // 从用户选择的 URI 读取文件（IO 操作在 dialog 内处理）
+                kotlinx.coroutines.runBlocking {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val inputStream = activityContext.contentResolver.openInputStream(uri)
+                            val json = inputStream?.bufferedReader()?.readText() ?: ""
+                            inputStream?.close()
+                            viewModel.importBackupData(json) { _, _ -> }
+                        } catch (e: Exception) {
+                            Log.e("ProfileScreen", "Failed to read backup file", e)
+                        }
+                    }
+                }
+            },
+            getExportJson = { viewModel.exportBackupData() }
         )
     }
 }
@@ -1058,5 +1119,257 @@ fun CrashLogDialog(
         },
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth(0.95f)
+    )
+}
+
+/**
+ * 备份/恢复对话框
+ * 使用系统文件选择器保存/读取备份文件
+ */
+@Composable
+fun BackupRestoreDialog(
+    isExporting: Boolean,
+    isImporting: Boolean,
+    onDismiss: () -> Unit,
+    onExport: (String, android.net.Uri) -> Unit,
+    onImport: (android.net.Uri) -> Unit,
+    getExportJson: () -> String
+) {
+    var statusMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+
+    // 导出：创建文件
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            isLoading = true
+            val json = getExportJson()
+            onExport(json, uri)
+            isLoading = false
+            statusMessage = "导出成功，请妥善保存备份文件"
+        }
+    }
+
+    // 导入：选择文件
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            isLoading = true
+            onImport(uri)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "备份与恢复",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+                Icon(
+                    painter = painterResource(R.drawable.ic_upload),
+                    contentDescription = null,
+                    tint = Color(0xFF2196F3),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (isExporting || isImporting || isLoading) {
+                    // 加载状态
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = if (isExporting) "正在导出..." else if (isImporting) "正在导入..." else "处理中...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF666666),
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                } else if (statusMessage.isNotEmpty()) {
+                    // 结果提示
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFE8F5E9),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = statusMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF424242),
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // 按钮
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { statusMessage = "" },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF666666)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("继续", fontSize = 14.sp)
+                        }
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("完成", fontSize = 14.sp)
+                        }
+                    }
+                } else {
+                    // 说明文字
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFFFF3E0),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFFF9800),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "导入将覆盖现有数据，请确认后再操作",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF424242),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    // 备份说明
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "备份内容",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color(0xFF2196F3)
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "API Keys（语音、对话、Qwen、OpenClaw）",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF424242),
+                                fontSize = 12.sp
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "对话历史记录",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF424242),
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 操作按钮
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val timestamp = java.text.SimpleDateFormat(
+                                    "yyyyMMdd_HHmmss",
+                                    java.util.Locale.getDefault()
+                                ).format(java.util.Date())
+                                exportLauncher.launch("linkai_backup_$timestamp.json")
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_upload),
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("导出备份", fontSize = 14.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                importLauncher.launch(arrayOf("application/json"))
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_download),
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("导入恢复", fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        shape = RoundedCornerShape(16.dp)
     )
 }

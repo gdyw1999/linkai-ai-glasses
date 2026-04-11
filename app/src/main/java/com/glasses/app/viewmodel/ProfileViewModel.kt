@@ -26,7 +26,10 @@ data class ProfileUiState(
     val showAboutDialog: Boolean = false,
     val showFAQDialog: Boolean = false,
     val showApiConfigDialog: Boolean = false,
-    val showCrashLogDialog: Boolean = false
+    val showCrashLogDialog: Boolean = false,
+    val showBackupDialog: Boolean = false,
+    val isExporting: Boolean = false,
+    val isImporting: Boolean = false
 )
 
 /**
@@ -284,6 +287,100 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
      */
     fun hideCrashLog() {
         _uiState.value = _uiState.value.copy(showCrashLogDialog = false)
+    }
+
+    // ==================== 备份/恢复 ====================
+
+    /**
+     * 显示备份/恢复对话框
+     */
+    fun showBackupDialog() {
+        _uiState.value = _uiState.value.copy(showBackupDialog = true)
+    }
+
+    /**
+     * 隐藏备份/恢复对话框
+     */
+    fun hideBackupDialog() {
+        _uiState.value = _uiState.value.copy(showBackupDialog = false)
+    }
+
+    /**
+     * 导出配置数据（API Keys + 对话历史）
+     * 返回包含导出数据的JSON字符串
+     */
+    fun exportBackupData(): String {
+        _uiState.value = _uiState.value.copy(isExporting = true, statusMessage = "正在导出...")
+        val jsonMap = mutableMapOf<String, Any>()
+
+        // 导出 API Keys
+        val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
+        jsonMap["apiKeys"] = apiKeyManager.exportAsMap()
+        jsonMap["exportTime"] = System.currentTimeMillis()
+        jsonMap["appVersion"] = _uiState.value.appVersion
+
+        // 导出对话历史（协程内同步执行）
+        try {
+            kotlinx.coroutines.runBlocking {
+                val conversationRepo = com.glasses.app.data.repository.ConversationRepository.getInstance(context)
+                jsonMap["conversations"] = conversationRepo.exportAllData()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to export conversations", e)
+            jsonMap["conversations"] = emptyList<Map<String, Any>>()
+        }
+
+        _uiState.value = _uiState.value.copy(isExporting = false)
+        return com.google.gson.Gson().toJson(jsonMap)
+    }
+
+    /**
+     * 导入配置数据（API Keys + 对话历史）
+     * @param json 导出的JSON字符串
+     * @param onResult 导入结果回调（success, message）
+     */
+    fun importBackupData(json: String, onResult: (Boolean, String) -> Unit) {
+        _uiState.value = _uiState.value.copy(isImporting = true, statusMessage = "正在导入...")
+
+        viewModelScope.launch {
+            try {
+                val data = com.google.gson.Gson().fromJson(json, Map::class.java)
+
+                // 导入 API Keys
+                val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
+                @Suppress("UNCHECKED_CAST")
+                val apiKeysMap = data["apiKeys"] as? Map<String, String>
+                if (apiKeysMap != null) {
+                    apiKeyManager.importFromMap(apiKeysMap, clearFirst = true)
+                    // 通知 LinkAIClient 重新加载 Key
+                    com.glasses.app.data.remote.api.LinkAIClient.reloadApiKey()
+                }
+
+                // 导入对话历史
+                val conversationRepo = com.glasses.app.data.repository.ConversationRepository.getInstance(context)
+                @Suppress("UNCHECKED_CAST")
+                val conversations = data["conversations"] as? List<Map<String, Any>>
+                if (conversations != null) {
+                    conversationRepo.importFromData(conversations, clearFirst = true)
+                }
+
+                _uiState.value = _uiState.value.copy(
+                    isImporting = false,
+                    statusMessage = "导入成功"
+                )
+                onResult(true, "导入成功，共恢复 ${conversations?.size ?: 0} 条对话")
+
+                kotlinx.coroutines.delay(1500)
+                _uiState.value = _uiState.value.copy(statusMessage = "", showBackupDialog = false)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to import backup data", e)
+                _uiState.value = _uiState.value.copy(
+                    isImporting = false,
+                    statusMessage = "导入失败: ${e.message}"
+                )
+                onResult(false, "导入失败: ${e.message}")
+            }
+        }
     }
 }
 

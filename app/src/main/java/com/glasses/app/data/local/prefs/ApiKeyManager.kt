@@ -194,18 +194,54 @@ class ApiKeyManager private constructor(context: Context) {
     }
 
     // ==================== 通用方法 ====================
-    
+
     /**
      * 清空所有API Keys
      */
     fun clearAllApiKeys() {
         prefs.edit().clear().apply()
     }
-    
+
     /**
      * 检查是否已配置所有必需的API Keys
      */
     fun hasAllRequiredApiKeys(): Boolean {
         return hasLinkAIVoiceApiKey() && hasLinkAIChatApiKey()
+    }
+
+    // ==================== 导出/导入 ====================
+
+    /**
+     * 导出所有API Keys为Map
+     */
+    fun exportAsMap(): Map<String, String> {
+        return mapOf(
+            KEY_LINKAI_VOICE_API_KEY to getLinkAIVoiceApiKey(),
+            KEY_LINKAI_CHAT_API_KEY to getLinkAIChatApiKey(),
+            KEY_ALI_QWEN_VISION_API_KEY to getAliQwenVisionApiKey(),
+            KEY_ALI_QWEN_VISION_MODEL to getAliQwenVisionModel(),
+            KEY_OPENCLAW_API_KEY to getOpenClawApiKey(),
+            KEY_OPENCLAW_APP_ID to getOpenClawAppId(),
+            KEY_LINKAI_APP_CODE to getLinkAIAppCode()
+        )
+    }
+
+    /**
+     * 从Map导入API Keys
+     * @param map 包含所有API Key的Map
+     * @param clearFirst 是否先清空现有配置
+     */
+    fun importFromMap(map: Map<String, String>, clearFirst: Boolean = false) {
+        if (clearFirst) {
+            prefs.edit().clear().apply()
+        }
+        map[KEY_LINKAI_VOICE_API_KEY]?.takeIf { it.isNotEmpty() }?.let { saveLinkAIVoiceApiKey(it) }
+        map[KEY_LINKAI_CHAT_API_KEY]?.takeIf { it.isNotEmpty() }?.let { saveLinkAIChatApiKey(it) }
+        map[KEY_ALI_QWEN_VISION_API_KEY]?.takeIf { it.isNotEmpty() }?.let { saveAliQwenVisionApiKey(it) }
+        map[KEY_ALI_QWEN_VISION_MODEL]?.takeIf { it.isNotEmpty() }?.let { saveAliQwenVisionModel(it) }
+        map[KEY_OPENCLAW_API_KEY]?.takeIf { it.isNotEmpty() }?.let { saveOpenClawApiKey(it) }
+        map[KEY_OPENCLAW_APP_ID]?.takeIf { it.isNotEmpty() }?.let { saveOpenClawAppId(it) }
+        // app_code 允许导入空值（表示清除）
+        saveLinkAIAppCode(map[KEY_LINKAI_APP_CODE] ?: "")
     }
 }

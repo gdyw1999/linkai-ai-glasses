@@ -193,7 +193,7 @@ class ConversationRepository(context: Context) {
     suspend fun clearConversationMessages(conversationId: Long) {
         try {
             messageDao.deleteMessagesByConversationId(conversationId)
-            
+
             // 更新会话的消息数量
             val conversation = conversationDao.getConversationById(conversationId)
             if (conversation != null) {
@@ -201,10 +201,108 @@ class ConversationRepository(context: Context) {
                     conversation.copy(messageCount = 0)
                 )
             }
-            
+
             Log.d(TAG, "Cleared messages for conversation: $conversationId")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to clear conversation messages", e)
+        }
+    }
+
+    // ==================== 导出/导入 ====================
+
+    /**
+     * 导出所有会话数据（包含消息）用于备份
+     * @return 包含所有会话和消息的列表
+     */
+    suspend fun exportAllData(): List<Map<String, Any>> {
+        return try {
+            val conversations = mutableListOf<Map<String, Any>>()
+            // 使用一次性查询获取所有会话
+            val convList = database.conversationDao().getAllConversationsOnce()
+            for (conv in convList) {
+                val messages = database.messageDao().getMessagesByConversationIdOnce(conv.id)
+                conversations.add(
+                    mapOf(
+                        "conversation" to mapOf(
+                            "id" to conv.id,
+                            "title" to conv.title,
+                            "createdAt" to conv.createdAt,
+                            "updatedAt" to conv.updatedAt,
+                            "messageCount" to conv.messageCount
+                        ),
+                        "messages" to messages.map { msg ->
+                            mapOf(
+                                "id" to msg.id,
+                                "content" to msg.content,
+                                "role" to msg.role,
+                                "audioUrl" to (msg.audioUrl ?: ""),
+                                "createdAt" to msg.createdAt
+                            )
+                        }
+                    )
+                )
+            }
+            conversations
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to export data", e)
+            emptyList()
+        }
+    }
+
+    /**
+     * 从备份数据导入会话
+     * @param data 导出的会话数据列表
+     * @param clearFirst 是否先清空现有数据
+     */
+    suspend fun importFromData(data: List<Map<String, Any>>, clearFirst: Boolean = false) {
+        try {
+            if (clearFirst) {
+                // 先删所有会话（级联删除消息）
+                val convList = database.conversationDao().getAllConversationsOnce()
+                for (conv in convList) {
+                    database.conversationDao().deleteConversation(conv)
+                }
+            }
+
+            for (item in data) {
+                @Suppress("UNCHECKED_CAST")
+                val convMap = item["conversation"] as? Map<String, Any> ?: continue
+                @Suppress("UNCHECKED_CAST")
+                val messagesList = item["messages"] as? List<Map<String, Any>> ?: emptyList()
+
+                val title = convMap["title"] as? String ?: "导入会话"
+                val createdAt = (convMap["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+                val updatedAt = (convMap["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+
+                // 创建会话
+                val convEntity = ConversationEntity(
+                    title = title,
+                    createdAt = createdAt,
+                    updatedAt = updatedAt,
+                    messageCount = messagesList.size
+                )
+                val convId = database.conversationDao().insertConversation(convEntity)
+
+                // 插入消息
+                for (msgMap in messagesList) {
+                    val msgContent = msgMap["content"] as? String ?: ""
+                    val msgRole = msgMap["role"] as? String ?: "user"
+                    val msgAudioUrl = msgMap["audioUrl"] as? String
+                    val msgCreatedAt = (msgMap["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+
+                    val msgEntity = MessageEntity(
+                        conversationId = convId,
+                        content = msgContent,
+                        role = msgRole,
+                        audioUrl = msgAudioUrl?.takeIf { it.isNotEmpty() },
+                        createdAt = msgCreatedAt
+                    )
+                    database.messageDao().insertMessage(msgEntity)
+                }
+            }
+            Log.d(TAG, "Imported ${data.size} conversations")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to import data", e)
         }
     }
 }
