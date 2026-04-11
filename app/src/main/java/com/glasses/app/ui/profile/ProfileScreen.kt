@@ -138,20 +138,11 @@ fun ProfileScreen(
 
             MenuItemCard(
                 icon = Icons.Default.Settings,
-                title = "备份配置",
-                subtitle = "导出API Keys和对话历史到文件",
+                title = "备份与恢复",
+                subtitle = "导出或恢复API Keys和对话历史",
                 onClick = { viewModel.showBackupDialog() }
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            MenuItemCard(
-                icon = Icons.Default.Refresh,
-                title = "恢复配置",
-                subtitle = "从备份文件恢复API Keys和对话历史",
-                onClick = { viewModel.showBackupDialog() }
-            )
-            
             Spacer(modifier = Modifier.height(24.dp))
             
             // 状态提示
