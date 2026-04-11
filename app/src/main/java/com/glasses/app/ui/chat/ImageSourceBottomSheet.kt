@@ -9,13 +9,16 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Cameras
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,12 +61,12 @@ data class ImageSourceItem(
     val label: String
 )
 
-// 四个功能入口
+// 四个功能入口（使用基础图标集：Person/Star/Settings/Send）
 private val imageSources = listOf(
-    ImageSourceItem(ImageSource.ALBUM_PHONE, Icons.Default.Photo, "手机相册"),
-    ImageSourceItem(ImageSource.ALBUM_GLASSES, Icons.Default.Image, "眼镜相册"),
-    ImageSourceItem(ImageSource.CAMERA_PHONE, Icons.Default.CameraAlt, "手机拍照"),
-    ImageSourceItem(ImageSource.CAMERA_GLASSES, Icons.Default.Cameras, "眼镜拍照")
+    ImageSourceItem(ImageSource.ALBUM_PHONE, Icons.Default.Person, "手机相册"),
+    ImageSourceItem(ImageSource.ALBUM_GLASSES, Icons.Default.Star, "眼镜相册"),
+    ImageSourceItem(ImageSource.CAMERA_PHONE, Icons.Default.Settings, "手机拍照"),
+    ImageSourceItem(ImageSource.CAMERA_GLASSES, Icons.Default.Send, "眼镜拍照")
 )
 
 /**
@@ -162,34 +165,16 @@ fun ImageSourceGrid(
     items: List<ImageSourceItem>,
     onItemClick: (ImageSource) -> Unit
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // 第一行：手机相册、眼镜相册
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items.take(2).forEach { item ->
-                ImageSourceButton(
-                    item = item,
-                    onClick = { onItemClick(item.source) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-        // 第二行：手机拍照、眼镜拍照
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items.drop(2).forEach { item ->
-                ImageSourceButton(
-                    item = item,
-                    onClick = { onItemClick(item.source) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
+        items.forEach { item ->
+            ImageSourceButton(
+                item = item,
+                onClick = { onItemClick(item.source) },
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }

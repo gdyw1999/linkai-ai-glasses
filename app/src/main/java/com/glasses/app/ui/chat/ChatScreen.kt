@@ -3,8 +3,8 @@ package com.glasses.app.ui.chat
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaContract
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +12,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -27,6 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.painterResource
 import coil.request.ImageRequest
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,11 +40,15 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.glasses.app.data.local.media.MediaFile
 import com.glasses.app.data.local.media.MediaType
+import com.glasses.app.data.remote.sdk.ConnectionState
+import com.glasses.app.data.remote.sdk.GlassesSDKManager
 import com.glasses.app.data.remote.sdk.MediaSyncManager
 import com.glasses.app.viewmodel.ChatViewModel
+import com.glasses.app.R
 import com.glasses.app.viewmodel.ChatViewModelFactory
 import com.glasses.app.viewmodel.Conversation
 import com.glasses.app.viewmodel.Message
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -48,6 +56,7 @@ import java.util.*
  * AI对话屏幕
  * 显示消息列表、录音按钮、会话管理
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     innerPadding: PaddingValues = PaddingValues(),
@@ -77,7 +86,7 @@ fun ChatScreen(
 
     // 手机相册 - PickVisualMedia Launcher
     val phoneAlbumLauncher = rememberLauncherForActivityResult(
-        contract = PickVisualMediaContract()
+        contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             val file = copyUriToTempFile(context, it)
@@ -151,6 +160,7 @@ fun ChatScreen(
             ChatControlBar(
                 isRecording = uiState.isRecording,
                 isProcessing = uiState.isProcessing,
+                isConnected = uiState.isConnected,
                 onStartRecording = { viewModel.startRecording() },
                 onStopRecording = { viewModel.stopRecording() },
                 onInterrupt = { viewModel.interrupt() },
@@ -184,7 +194,7 @@ fun ChatScreen(
                 onSourceSelected = { source ->
                     when (source) {
                         ImageSource.ALBUM_PHONE -> {
-                            phoneAlbumLauncher.launch(null)
+                            phoneAlbumLauncher.launch("image/*")
                         }
                         ImageSource.CAMERA_PHONE -> {
                             val photoFile = createTempImageFile(context)
@@ -197,14 +207,24 @@ fun ChatScreen(
                             cameraLauncher.launch(uri)
                         }
                         ImageSource.ALBUM_GLASSES -> {
-                            // 眼镜相册：展开 GlassesAlbumSheet
-                            showImageSourceSheet = false
-                            showGlassesAlbumSheet = true
+                            val sdkManager = GlassesSDKManager.getInstance(context)
+                            if (sdkManager.connectionState.value != ConnectionState.CONNECTED) {
+                                Toast.makeText(context, "请先连接眼镜", Toast.LENGTH_SHORT).show()
+                                showImageSourceSheet = false
+                            } else {
+                                showImageSourceSheet = false
+                                showGlassesAlbumSheet = true
+                            }
                         }
                         ImageSource.CAMERA_GLASSES -> {
-                            // 眼镜拍照 + 分析
-                            showImageSourceSheet = false
-                            viewModel.glassesCameraAndAnalyze()
+                            val sdkManager = GlassesSDKManager.getInstance(context)
+                            if (sdkManager.connectionState.value != ConnectionState.CONNECTED) {
+                                Toast.makeText(context, "请先连接眼镜", Toast.LENGTH_SHORT).show()
+                                showImageSourceSheet = false
+                            } else {
+                                showImageSourceSheet = false
+                                viewModel.glassesCameraAndAnalyze()
+                            }
                         }
                     }
                 },
@@ -420,6 +440,7 @@ fun StatusBar(message: String) {
 fun ChatControlBar(
     isRecording: Boolean,
     isProcessing: Boolean,
+    isConnected: Boolean,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
     onInterrupt: () -> Unit,
@@ -475,15 +496,16 @@ fun ChatControlBar(
                     if (inputText.isBlank()) {
                         IconButton(
                             onClick = onStartRecording,
+                            enabled = isConnected,
                             modifier = Modifier
                                 .size(44.dp)
                                 .background(
-                                    Color(0xFF2196F3),
+                                    if (isConnected) Color(0xFF2196F3) else Color(0xFFBDBDBD),
                                     RoundedCornerShape(22.dp)
                                 )
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Settings,
+                                painter = painterResource(id = R.drawable.ic_mic),
                                 contentDescription = "语音输入",
                                 tint = Color.White,
                                 modifier = Modifier.size(22.dp)
@@ -935,6 +957,7 @@ private fun createTempImageFile(context: android.content.Context): File {
 /**
  * 眼镜相册选择面板（内嵌 ModalBottomSheet）
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GlassesAlbumSheet(
     sheetState: SheetState,

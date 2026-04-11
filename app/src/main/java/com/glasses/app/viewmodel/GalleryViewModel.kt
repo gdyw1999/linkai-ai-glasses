@@ -1,12 +1,15 @@
 package com.glasses.app.viewmodel
 
 import android.content.Context
+import android.os.Environment
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.glasses.app.data.local.media.MediaFile
 import com.glasses.app.data.local.media.MediaType
+import com.glasses.app.data.remote.sdk.ConnectionState
+import com.glasses.app.data.remote.sdk.GlassesSDKManager
 import com.glasses.app.data.remote.sdk.MediaSyncManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -59,8 +62,11 @@ class GalleryViewModel(context: Context) : ViewModel() {
     // 后端模块
     private val mediaSyncManager = MediaSyncManager.getInstance(context)
     
-    // 相册目录路径
-    private val albumDirPath: String = File(context.getExternalFilesDir(null), ALBUM_DIR_NAME).absolutePath
+    // 相册目录路径（使用公共Pictures目录，卸载后仍保留）
+    private val albumDirPath: String by lazy {
+        val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        File(picturesDir, "星韵AI相册").absolutePath
+    }
     
     init {
         // 初始化媒体同步
@@ -150,6 +156,13 @@ class GalleryViewModel(context: Context) : ViewModel() {
     fun startSync() {
         viewModelScope.launch {
             try {
+                // 检查眼镜连接状态
+                val sdkManager = GlassesSDKManager.getInstance(context)
+                if (sdkManager.connectionState.value != ConnectionState.CONNECTED) {
+                    _uiState.value = _uiState.value.copy(statusMessage = "请先连接眼镜")
+                    return@launch
+                }
+
                 if (_uiState.value.isSyncing) {
                     _uiState.value = _uiState.value.copy(statusMessage = "正在同步中，请稍候")
                     return@launch

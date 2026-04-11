@@ -1,6 +1,7 @@
 package com.glasses.app.viewmodel
 
 import android.content.Context
+import android.os.Environment
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -85,7 +86,9 @@ class HomeViewModel(context: Context) : ViewModel() {
     private val aiService by lazy { AIServiceImpl.getInstance(context) }
     private val smartRecognitionRepository by lazy { SmartRecognitionRepository.getInstance(context) }
     private val albumDirPath: String by lazy {
-        File(context.getExternalFilesDir(null), ALBUM_DIR_NAME).absolutePath
+        // 使用公共Pictures目录，卸载后仍保留
+        val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        File(picturesDir, "星韵AI相册").absolutePath
     }
     
     // 充电状态 - 延迟初始化
@@ -347,6 +350,10 @@ class HomeViewModel(context: Context) : ViewModel() {
      */
     fun takePhoto() {
         com.glasses.app.util.AppLogger.i(TAG, "用户操作: 拍照")
+        if (!_uiState.value.isConnected) {
+            _uiState.value = _uiState.value.copy(statusMessage = "请先连接眼镜")
+            return
+        }
         _uiState.value = _uiState.value.copy(isLoading = true, statusMessage = "正在拍照...")
         mediaCaptureManager?.takePhoto { _, message ->
             _uiState.value = _uiState.value.copy(

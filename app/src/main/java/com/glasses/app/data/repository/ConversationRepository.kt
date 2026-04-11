@@ -93,6 +93,26 @@ class ConversationRepository(context: Context) {
             Log.e(TAG, "Failed to update conversation time", e)
         }
     }
+
+    /**
+     * 更新会话标题
+     */
+    suspend fun updateConversationTitle(id: Long, title: String) {
+        try {
+            val conversation = conversationDao.getConversationById(id)
+            if (conversation != null) {
+                conversationDao.updateConversation(
+                    conversation.copy(
+                        title = title,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+                Log.d(TAG, "Updated conversation title: $id -> $title")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update conversation title", e)
+        }
+    }
     
     /**
      * 添加消息

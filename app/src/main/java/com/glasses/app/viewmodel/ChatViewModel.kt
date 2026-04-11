@@ -2,10 +2,13 @@ package com.glasses.app.viewmodel
 
 import android.content.Context
 import android.util.Log
+import java.io.File
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.glasses.app.data.remote.api.AIServiceImpl
+import com.glasses.app.data.remote.sdk.ConnectionState
+import com.glasses.app.data.remote.sdk.GlassesSDKManager
 import com.glasses.app.data.remote.sdk.MediaCaptureManager
 import com.glasses.app.data.remote.sdk.MediaSyncManager
 import com.glasses.app.data.repository.ConversationRepository
@@ -59,7 +62,8 @@ data class ChatUiState(
     val statusMessage: String = "",
     val isListening: Boolean = false,
     val conversations: List<Conversation> = emptyList(),
-    val showConversationList: Boolean = false
+    val showConversationList: Boolean = false,
+    val isConnected: Boolean = false
 )
 
 /**
@@ -78,6 +82,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     
     // 后端模块
     private val recordingManager = RecordingManager.getInstance(context)
+    private val sdkManager = GlassesSDKManager.getInstance(context)
     private val aiService = AIServiceImpl.getInstance(context)
     private val conversationRepository = ConversationRepository.getInstance(context)
     private val smartRecognitionRepository = SmartRecognitionRepository.getInstance(context)
@@ -100,7 +105,14 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                 handleRecordingState(state)
             }
         }
-        
+
+        // 监听眼镜连接状态
+        viewModelScope.launch {
+            sdkManager.connectionState.collect { state ->
+                _uiState.value = _uiState.value.copy(isConnected = state == ConnectionState.CONNECTED)
+            }
+        }
+
         // 监听会话列表变化
         viewModelScope.launch {
             conversationRepository.getAllConversations().collect { entities ->
@@ -213,6 +225,10 @@ class ChatViewModel(private val context: Context) : ViewModel() {
      * 开始录音
      */
     fun startRecording() {
+        if (!_uiState.value.isConnected) {
+            _uiState.value = _uiState.value.copy(statusMessage = "请先连接眼镜")
+            return
+        }
         com.glasses.app.util.AppLogger.i(TAG, "用户操作: 开始录音(对话页)")
         viewModelScope.launch {
             try {
@@ -262,13 +278,22 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         com.glasses.app.util.AppLogger.i(TAG, "用户操作: 发送文本消息(长度=${text.length})")
         viewModelScope.launch {
             try {
+                val trimmedText = text.trim()
+
+                // 如果是初始标题"新对话"，用第一条消息内容更新标题
+                if (_uiState.value.conversationTitle == "新对话") {
+                    val title = if (trimmedText.length > 20) trimmedText.substring(0, 20) + "…" else trimmedText
+                    conversationRepository.updateConversationTitle(currentConversationId, title)
+                    _uiState.value = _uiState.value.copy(conversationTitle = title)
+                }
+
                 // 添加用户消息到UI
-                addUserMessage(text.trim())
+                addUserMessage(trimmedText)
 
                 // 保存用户消息到数据库
                 conversationRepository.addMessage(
                     conversationId = currentConversationId,
-                    content = text.trim(),
+                    content = trimmedText,
                     role = "user"
                 )
 
@@ -280,7 +305,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                 // 流式对话生成（携带 app_code 以指定 LinkAI 工作流）
                 val sessionId = currentConversationId.toString()
                 val appCode = apiKeyManager.getLinkAIAppCode().ifEmpty { null }
-                aiService.chatStreaming(text.trim(), sessionId, appCode).collect { textChunk ->
+                aiService.chatStreaming(trimmedText, sessionId, appCode).collect { textChunk ->
                     streamingChatManager.processStreamingText(textChunk)
                 }
 
@@ -333,7 +358,14 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                 
                 val userText = asrResult.getOrNull()!!
                 Log.d(TAG, "ASR result: $userText")
-                
+
+                // 如果是初始标题"新对话"，用第一条消息内容更新标题
+                if (_uiState.value.conversationTitle == "新对话") {
+                    val title = if (userText.length > 20) userText.substring(0, 20) + "…" else userText
+                    conversationRepository.updateConversationTitle(currentConversationId, title)
+                    _uiState.value = _uiState.value.copy(conversationTitle = title)
+                }
+
                 // 添加用户消息到UI
                 addUserMessage(userText)
                 

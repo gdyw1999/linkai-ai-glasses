@@ -1,15 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- 自动备份 SharedPreferences（API Keys 等配置）-->
+        <include domain="sharedpref" path="."/>
+        <!-- 自动备份数据库（对话历史） -->
+        <include domain="database" path="databases"/>
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <include domain="sharedpref" path="."/>
+        <include domain="database" path="databases"/>
     </device-transfer>
-    -->
 </data-extraction-rules>

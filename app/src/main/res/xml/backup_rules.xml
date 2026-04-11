@@ -3,5 +3,5 @@
     <!-- 自动备份 SharedPreferences（API Keys 等配置）-->
     <include domain="sharedpref" path="."/>
     <!-- 自动备份数据库（对话历史） -->
-    <include domain="database" path="."/>
+    <include domain="database" path="databases"/>
 </full-backup-content>
