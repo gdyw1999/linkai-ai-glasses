@@ -207,6 +207,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
      * 开始录音
      */
     fun startRecording() {
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 开始录音(对话页)")
         viewModelScope.launch {
             try {
                 val result = recordingManager.startRecording()
@@ -228,6 +229,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
      * 停止录音
      */
     fun stopRecording() {
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 停止录音")
         viewModelScope.launch {
             try {
                 val result = recordingManager.stopRecording()
@@ -251,7 +253,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
      */
     fun sendTextMessage(text: String) {
         if (text.isBlank()) return
-
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 发送文本消息(长度=${text.length})")
         viewModelScope.launch {
             try {
                 // 添加用户消息到UI
@@ -435,6 +437,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
      * 打断对话
      */
     fun interrupt() {
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 打断对话")
         try {
             Log.d(TAG, "Interrupting conversation")
             
@@ -511,6 +514,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
      * 新建对话
      */
     fun newConversation() {
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 新建对话")
         viewModelScope.launch {
             try {
                 // 创建新会话
@@ -639,6 +643,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
      * 消费首页智能识图结果并写入当前对话
      */
     private suspend fun consumeSmartRecognitionResult(result: SmartRecognitionResult) {
+        com.glasses.app.util.AppLogger.i(TAG, "收到智能识图结果: model=${result.model}, 答案长度=${result.answer.length}")
         try {
             if (currentConversationId == 0L) {
                 currentConversationId = conversationRepository.createConversation("智能识图")

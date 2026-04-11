@@ -2,6 +2,44 @@
 
 All notable changes to the Linkai星韵AI眼镜Android App project will be documented in this file.
 
+## [0.212] - 2026-04-11
+
+### Fixed - 相册同步稳定性
+
+- **修复同步卡在"同步中"不结束**
+  - `stopSync()` 同步更新 `_syncProgress.isComplete=true`，解决 StateFlow 时序导致 UI 持续显示同步中
+  - SDK 无任何 callback 时 30 秒兜底超时强制结束
+  - `fileCount(0)` 立即视为同步完成（眼镜无新文件时 SDK 报告 0 个文件）
+
+- **修复 MediaSyncManager 非幂等初始化**
+  - 首次 `initSync()` 才加载持久化和扫描本地目录
+  - 后续调用仅注册监听器，不再重复加载覆盖内存状态
+  - 解决多次初始化（HomeViewModel + GalleryViewModel）导致文件列表被覆盖的问题
+
+### Added - 相册持久化与数据恢复
+
+- **媒体文件元数据持久化**
+  - `MediaFile` 列表通过 SharedPreferences + Gson 持久化
+  - SharedPreferences 已配置自动备份（`backup_rules.xml`），重装后可恢复文件列表
+  - 每次同步新增/删除文件后立即持久化
+
+- **本地目录扫描补充**
+  - `scanLocalAlbumDirectory()` 扫描相册目录，将实际存在但 SDK 未记录的文件补充到列表
+  - 解决：SDK 重装后丢失同步记录，但本地文件仍在的情况
+
+### Changed - 相册 UI 优化
+
+- **真实缩略图显示**
+  - `GalleryScreen` 图片项使用 Coil `AsyncImage` 加载真实缩略图
+  - 视频项显示播放图标 + 文件名 + 时长标签
+  - 音频项显示音符图标 + 文件名（去扩展名）+ 时长标签
+
+- **运行日志全面扩展**
+  - `GalleryViewModel`：同步开始/完成/超时每步均记录 AppLogger
+  - `HomeViewModel`：拍照、智能识图每步记录 AppLogger
+  - `ChatViewModel`：文本消息、语音录制/停止/中断详细记录
+  - `GlassesSDKManager`：蓝牙扫描/连接/断开详细记录
+
 ## [0.211] - 2026-04-11
 
 ### Added - AI 对话页文本输入 + LinkAI 工作流
@@ -48,7 +86,7 @@ All notable changes to the Linkai星韵AI眼镜Android App project will be docum
 
 ### Changed
 
-- 版本号从 `1.0.0` 改为 `0.xxx` 格式，当前 `0.211`（versionCode 同步）
+- 版本号从 `1.0.0` 改为 `0.xxx` 格式，当前 `0.212`（versionCode 同步）
 
 ## [1.3.0] - 2026-04-11
 

@@ -15,12 +15,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.glasses.app.data.local.media.MediaFile
 import com.glasses.app.data.local.media.MediaType
 import com.glasses.app.ui.media.MediaViewerScreen
@@ -335,6 +340,9 @@ fun SyncProgressBar(progress: Int) {
 
 /**
  * 媒体网格项
+ * 图片：Coil 异步加载缩略图
+ * 视频：背景色 + 播放图标 + 时长
+ * 音频：背景色 + 音符图标 + 时长 + 文件名
  */
 @Composable
 fun MediaGridItem(
@@ -351,21 +359,69 @@ fun MediaGridItem(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFE0E0E0)),
+                .background(Color(0xFFE8E8E8)),
             contentAlignment = Alignment.Center
         ) {
-            // 媒体类型图标
-            Icon(
-                imageVector = when (media.type) {
-                    MediaType.IMAGE -> Icons.Default.Add
-                    MediaType.VIDEO -> Icons.Default.PlayArrow
-                    MediaType.AUDIO -> Icons.Default.Settings
-                },
-                contentDescription = null,
-                tint = Color(0xFF999999),
-                modifier = Modifier.size(32.dp)
-            )
-            
+            when (media.type) {
+                MediaType.IMAGE -> {
+                    // 图片：使用 Coil 异步加载，支持缩略图和原始路径
+                    val imageModel = media.thumbnailPath?.let { File(it) }
+                        ?.takeIf { it.exists() }
+                        ?: File(media.filePath).takeIf { it.exists() }
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(imageModel)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = media.fileName,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                MediaType.VIDEO -> {
+                    // 视频：显示播放图标 + 文件名 + 时长
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "视频",
+                        tint = Color(0xFF666666),
+                        modifier = Modifier.size(36.dp)
+                    )
+                    // 文件名
+                    Text(
+                        text = media.fileName,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF666666),
+                        fontSize = 8.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                MediaType.AUDIO -> {
+                    // 音频：音符图标 + 文件名 + 时长
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "音频",
+                        tint = Color(0xFF999999),
+                        modifier = Modifier.size(32.dp)
+                    )
+                    // 文件名（去掉扩展名）
+                    Text(
+                        text = media.fileName.removeSuffix(".wav").removeSuffix(".opus"),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF666666),
+                        fontSize = 8.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
             // 视频/音频时长标签
             if (media.type == MediaType.VIDEO || media.type == MediaType.AUDIO) {
                 Surface(

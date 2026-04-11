@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!--
-   See https://developer.android.com/guide/topics/data/autobackup
-   for more details on configuring backup rules
-   -->
+    <!-- 自动备份 SharedPreferences（API Keys 等配置）-->
+    <include domain="sharedpref" path="."/>
+    <!-- 自动备份数据库（对话历史） -->
+    <include domain="database" path="."/>
 </full-backup-content>

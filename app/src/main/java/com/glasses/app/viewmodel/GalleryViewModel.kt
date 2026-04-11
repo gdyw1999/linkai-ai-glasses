@@ -5,10 +5,11 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.glasses.app.data.local.media.LocalMediaManager
 import com.glasses.app.data.local.media.MediaFile
 import com.glasses.app.data.local.media.MediaType
 import com.glasses.app.data.remote.sdk.MediaSyncManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,21 +40,24 @@ data class GalleryUiState(
 /**
  * 相册ViewModel
  * 管理媒体同步、列表显示、类型筛选等
- * 集成真实的后端模块：MediaSyncManager、LocalMediaManager
+ * 集成真实的后端模块：MediaSyncManager
  */
-class GalleryViewModel(private val context: Context) : ViewModel() {
+@android.annotation.SuppressLint("StaticFieldLeak")
+class GalleryViewModel(context: Context) : ViewModel() {
+    private val context: Context = context.applicationContext
     
     companion object {
         private const val TAG = "GalleryViewModel"
         private const val ALBUM_DIR_NAME = "GlassesAlbum"
+        private const val SYNC_TIMEOUT_MS = 30_000L // 30秒同步超时
     }
-    
+
     private val _uiState = MutableStateFlow(GalleryUiState())
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
+    private var syncTimeoutJob: Job? = null
     
     // 后端模块
     private val mediaSyncManager = MediaSyncManager.getInstance(context)
-    private val localMediaManager = LocalMediaManager.getInstance(context)
     
     // 相册目录路径
     private val albumDirPath: String = File(context.getExternalFilesDir(null), ALBUM_DIR_NAME).absolutePath
@@ -77,16 +81,35 @@ class GalleryViewModel(private val context: Context) : ViewModel() {
                 val isSyncing = mediaSyncManager.isSyncingNow()
                 
                 val syncMessage = when {
-                    progress.hasError -> "同步失败: ${progress.errorMessage}"
-                    progress.isComplete -> "同步完成"
-                    isSyncing && progress.currentFileName.isNotEmpty() -> 
+                    progress.hasError -> {
+                        com.glasses.app.util.AppLogger.e(TAG, "同步失败: ${progress.errorMessage}")
+                        "同步失败: ${progress.errorMessage}"
+                    }
+                    progress.isComplete -> {
+                        syncTimeoutJob?.cancel()
+                        com.glasses.app.util.AppLogger.i(TAG, "同步完成，共${_uiState.value.mediaFiles.size}个文件")
+                        // 同步完成时强制结束同步状态（避免 SDK 回调时序导致 UI 卡在"同步中"）
+                        mediaSyncManager.stopSync()
+                        // 3秒后自动清除"同步完成"提示
+                        viewModelScope.launch {
+                            delay(3000)
+                            if (_uiState.value.syncMessage == "同步完成") {
+                                _uiState.value = _uiState.value.copy(syncMessage = "")
+                            }
+                        }
+                        "同步完成"
+                    }
+                    isSyncing && progress.currentFileName.isNotEmpty() ->
                         "正在同步: ${progress.currentFileName} (${progress.currentIndex}/${progress.totalCount})"
                     isSyncing -> "正在同步..."
                     else -> ""
                 }
-                
+
+                // 同步完成后强制 isSyncing=false，不依赖 SDK 的 isSyncingNow()
+                val finalIsSyncing = isSyncing && !progress.isComplete && !progress.hasError
+
                 _uiState.value = _uiState.value.copy(
-                    isSyncing = isSyncing,
+                    isSyncing = finalIsSyncing,
                     syncProgress = overallProgress,
                     syncMessage = syncMessage
                 )
@@ -122,45 +145,48 @@ class GalleryViewModel(private val context: Context) : ViewModel() {
     }
     
     /**
-     * 开始同步媒体
+     * 开始同步媒体（30秒超时保护）
      */
     fun startSync() {
         viewModelScope.launch {
             try {
                 if (_uiState.value.isSyncing) {
-                    _uiState.value = _uiState.value.copy(
-                        statusMessage = "正在同步中，请稍候"
-                    )
+                    _uiState.value = _uiState.value.copy(statusMessage = "正在同步中，请稍候")
                     return@launch
                 }
-                
+
+                com.glasses.app.util.AppLogger.i(TAG, "开始同步媒体文件...")
                 mediaSyncManager.startSync { success, message ->
+                    com.glasses.app.util.AppLogger.i(TAG, "同步启动结果: success=$success, msg=$message")
                     if (!success) {
+                        _uiState.value = _uiState.value.copy(statusMessage = message)
+                    }
+                }
+
+                // 启动超时保护：30秒后强制结束同步状态
+                syncTimeoutJob?.cancel()
+                syncTimeoutJob = viewModelScope.launch {
+                    delay(SYNC_TIMEOUT_MS)
+                    if (mediaSyncManager.isSyncingNow()) {
+                        com.glasses.app.util.AppLogger.w(TAG, "同步超时(${SYNC_TIMEOUT_MS}ms)，强制停止")
+                        mediaSyncManager.stopSync()
                         _uiState.value = _uiState.value.copy(
-                            statusMessage = message
+                            isSyncing = false,
+                            statusMessage = "同步超时，已自动停止"
                         )
+                        // 3秒后清除提示
+                        delay(3000)
+                        _uiState.value = _uiState.value.copy(statusMessage = "")
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to start sync", e)
-                _uiState.value = _uiState.value.copy(
-                    statusMessage = "同步失败: ${e.message}"
-                )
+                com.glasses.app.util.AppLogger.e(TAG, "同步启动失败", e)
+                _uiState.value = _uiState.value.copy(statusMessage = "同步失败: ${e.message}")
             }
         }
     }
     
-    /**
-     * 停止同步
-     */
-    fun stopSync() {
-        mediaSyncManager.stopSync()
-        _uiState.value = _uiState.value.copy(
-            isSyncing = false,
-            statusMessage = "已停止同步"
-        )
-    }
-    
+
     /**
      * 筛选媒体类型
      */
@@ -222,79 +248,12 @@ class GalleryViewModel(private val context: Context) : ViewModel() {
                 }
                 
                 // 清除状态消息
-                kotlinx.coroutines.delay(1500)
+                delay(1500)
                 _uiState.value = _uiState.value.copy(statusMessage = "")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete media", e)
                 _uiState.value = _uiState.value.copy(
                     statusMessage = "删除失败: ${e.message}"
-                )
-            }
-        }
-    }
-    
-    /**
-     * 生成缩略图
-     */
-    fun generateThumbnail(media: MediaFile) {
-        viewModelScope.launch {
-            try {
-                when (media.type) {
-                    MediaType.IMAGE -> {
-                        localMediaManager.generateImageThumbnail(media.filePath) { success, thumbnailPath ->
-                            if (success && thumbnailPath != null) {
-                                Log.d(TAG, "Image thumbnail generated: $thumbnailPath")
-                            } else {
-                                Log.e(TAG, "Failed to generate image thumbnail")
-                            }
-                        }
-                    }
-                    MediaType.VIDEO -> {
-                        localMediaManager.generateVideoThumbnail(media.filePath) { success, thumbnailPath ->
-                            if (success && thumbnailPath != null) {
-                                Log.d(TAG, "Video thumbnail generated: $thumbnailPath")
-                            } else {
-                                Log.e(TAG, "Failed to generate video thumbnail")
-                            }
-                        }
-                    }
-                    MediaType.AUDIO -> {
-                        // 音频不需要缩略图
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to generate thumbnail", e)
-            }
-        }
-    }
-    
-    /**
-     * 清空所有媒体文件
-     */
-    fun clearAllMedia() {
-        viewModelScope.launch {
-            try {
-                mediaSyncManager.clearAllMediaFiles { success, message ->
-                    if (success) {
-                        _uiState.value = _uiState.value.copy(
-                            statusMessage = "已清空所有媒体文件"
-                        )
-                        Log.d(TAG, "All media files cleared")
-                    } else {
-                        _uiState.value = _uiState.value.copy(
-                            statusMessage = message
-                        )
-                        Log.e(TAG, "Failed to clear media files: $message")
-                    }
-                }
-                
-                // 清除状态消息
-                kotlinx.coroutines.delay(1500)
-                _uiState.value = _uiState.value.copy(statusMessage = "")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to clear all media", e)
-                _uiState.value = _uiState.value.copy(
-                    statusMessage = "清空失败: ${e.message}"
                 )
             }
         }

@@ -83,6 +83,7 @@ class GlassesSDKManager private constructor(context: Context) {
      * 返回Flow，持续发送扫描到的设备
      */
     fun scanDevices(): Flow<ScannedDevice> = callbackFlow {
+        com.glasses.app.util.AppLogger.i(TAG, "SDK: 开始蓝牙扫描")
         // 检查蓝牙权限
         if (!hasBluetoothPermissions()) {
             close(SecurityException("Missing Bluetooth permissions"))
@@ -184,6 +185,7 @@ class GlassesSDKManager private constructor(context: Context) {
      * @param deviceAddress 设备MAC地址
      */
     suspend fun connect(deviceAddress: String): Result<Unit> = suspendCancellableCoroutine { continuation ->
+        com.glasses.app.util.AppLogger.i(TAG, "SDK: 连接设备 $deviceAddress")
         try {
             if (!hasBluetoothPermissions()) {
                 continuation.resume(Result.failure(SecurityException("Missing Bluetooth permissions")))
@@ -211,6 +213,7 @@ class GlassesSDKManager private constructor(context: Context) {
      * 断开连接
      */
     suspend fun disconnect(): Result<Unit> = suspendCancellableCoroutine { continuation ->
+        com.glasses.app.util.AppLogger.i(TAG, "SDK: 断开设备连接")
         try {
             // 重置重连计数（手动断开不需要自动重连）
             resetReconnectAttempts()

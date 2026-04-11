@@ -158,15 +158,16 @@ class HomeViewModel(context: Context) : ViewModel() {
     private fun updateConnectionState(state: ConnectionState) {
         when (state) {
             ConnectionState.DISCONNECTED -> {
+                com.glasses.app.util.AppLogger.i(TAG, "设备已断开")
                 _uiState.value = _uiState.value.copy(
                     isConnected = false,
                     deviceName = "未连接",
                     statusMessage = "设备已断开"
                 )
-                // 停止前台服务（捕获权限异常）
                 try { stopForegroundService() } catch (_: SecurityException) { }
             }
             ConnectionState.CONNECTING -> {
+                com.glasses.app.util.AppLogger.i(TAG, "正在连接设备...")
                 _uiState.value = _uiState.value.copy(
                     isConnected = false,
                     statusMessage = "正在连接..."
@@ -175,14 +176,13 @@ class HomeViewModel(context: Context) : ViewModel() {
             ConnectionState.CONNECTED -> {
                 @android.annotation.SuppressLint("MissingPermission")
                 val deviceName = sdkManager?.getCurrentDevice()?.name ?: "已连接"
+                com.glasses.app.util.AppLogger.i(TAG, "设备已连接: $deviceName")
                 _uiState.value = _uiState.value.copy(
                     isConnected = true,
                     deviceName = deviceName,
                     statusMessage = "连接成功"
                 )
-                // 连接成功后查询电量
                 queryBattery()
-                // 启动前台服务（捕获权限异常）
                 try { startForegroundService() } catch (_: SecurityException) { }
             }
         }
@@ -245,12 +245,9 @@ class HomeViewModel(context: Context) : ViewModel() {
      * 开始扫描设备
      */
     fun startScan() {
-        // 取消之前的扫描
         scanJob?.cancel()
-        
-        // 清空设备列表
         _scannedDevices.value = emptyList()
-        
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 开始扫描蓝牙设备")
         _uiState.value = _uiState.value.copy(isScanning = true, statusMessage = "正在扫描设备...")
         
         scanJob = viewModelScope.launch {
@@ -269,7 +266,7 @@ class HomeViewModel(context: Context) : ViewModel() {
                         if (!currentList.any { it.address == device.address }) {
                             currentList.add(device)
                             _scannedDevices.value = currentList
-                            Log.d(TAG, "Device added: ${device.name}")
+                            com.glasses.app.util.AppLogger.i(TAG, "扫描到设备: ${device.name}(${device.address})")
                         }
                     }
             } catch (e: Exception) {
@@ -296,6 +293,7 @@ class HomeViewModel(context: Context) : ViewModel() {
     fun stopScan() {
         scanJob?.cancel()
         sdkManager?.stopScan()
+        com.glasses.app.util.AppLogger.i(TAG, "停止扫描，共发现${_scannedDevices.value.size}个设备")
         _uiState.value = _uiState.value.copy(
             isScanning = false,
             statusMessage = "扫描完成，找到 ${_scannedDevices.value.size} 个设备"
@@ -306,6 +304,7 @@ class HomeViewModel(context: Context) : ViewModel() {
      * 连接设备
      */
     fun connectDevice(device: ScannedDevice) {
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 连接设备 ${device.name}(${device.address})")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(statusMessage = "正在连接 ${device.name}...")
             
@@ -347,6 +346,7 @@ class HomeViewModel(context: Context) : ViewModel() {
      * 拍照
      */
     fun takePhoto() {
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 拍照")
         _uiState.value = _uiState.value.copy(isLoading = true, statusMessage = "正在拍照...")
         mediaCaptureManager?.takePhoto { _, message ->
             _uiState.value = _uiState.value.copy(
@@ -360,6 +360,7 @@ class HomeViewModel(context: Context) : ViewModel() {
      * 开始录像
      */
     fun startVideo() {
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 开始录像")
         if (!_uiState.value.isConnected) {
             _uiState.value = _uiState.value.copy(statusMessage = "请先连接眼镜")
             return
@@ -380,6 +381,7 @@ class HomeViewModel(context: Context) : ViewModel() {
      * 停止录像
      */
     fun stopVideo() {
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 停止录像")
         mediaCaptureManager?.stopVideo { _, message ->
             _uiState.value = _uiState.value.copy(
                 isRecording = false,
@@ -392,6 +394,7 @@ class HomeViewModel(context: Context) : ViewModel() {
      * 开始录音
      */
     fun startAudio() {
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 开始录音")
         if (!_uiState.value.isConnected) {
             _uiState.value = _uiState.value.copy(statusMessage = "请先连接眼镜")
             return
@@ -412,6 +415,7 @@ class HomeViewModel(context: Context) : ViewModel() {
      * 停止录音
      */
     fun stopAudio() {
+        com.glasses.app.util.AppLogger.i(TAG, "用户操作: 停止录音")
         mediaCaptureManager?.stopAudio { _, message ->
             _uiState.value = _uiState.value.copy(
                 isRecording = false,
@@ -442,9 +446,11 @@ class HomeViewModel(context: Context) : ViewModel() {
         }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, statusMessage = "正在拍照...")
+            com.glasses.app.util.AppLogger.i(TAG, "智能识图: 开始拍照")
             try {
                 val photoResult = takePhotoSuspend()
                 if (!photoResult.first) {
+                    com.glasses.app.util.AppLogger.e(TAG, "智能识图: 拍照失败 - ${photoResult.second}")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         statusMessage = "拍照失败: ${photoResult.second}"
@@ -452,9 +458,11 @@ class HomeViewModel(context: Context) : ViewModel() {
                     return@launch
                 }
 
+                com.glasses.app.util.AppLogger.i(TAG, "智能识图: 拍照成功，开始同步图片")
                 _uiState.value = _uiState.value.copy(statusMessage = "拍照成功，正在同步图片...")
                 val imagePath = syncAndGetLatestImagePath()
                 if (imagePath.isNullOrEmpty()) {
+                    com.glasses.app.util.AppLogger.w(TAG, "智能识图: 未找到可识别的图片")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         statusMessage = "未找到可识别的图片，请先在相册同步后重试"
@@ -463,6 +471,7 @@ class HomeViewModel(context: Context) : ViewModel() {
                 }
 
                 val selectedModel = apiKeyManager.getAliQwenVisionModel()
+                com.glasses.app.util.AppLogger.i(TAG, "智能识图: 调用阿里Qwen model=$selectedModel")
                 _uiState.value = _uiState.value.copy(statusMessage = "正在智能识图...")
 
                 val recognitionResult = aiService.recognizeImage(
@@ -473,6 +482,7 @@ class HomeViewModel(context: Context) : ViewModel() {
                 )
 
                 if (recognitionResult.isFailure) {
+                    com.glasses.app.util.AppLogger.e(TAG, "智能识图: 识图失败", recognitionResult.exceptionOrNull())
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         statusMessage = "识图失败: ${recognitionResult.exceptionOrNull()?.message}"
@@ -481,6 +491,7 @@ class HomeViewModel(context: Context) : ViewModel() {
                 }
 
                 val answer = recognitionResult.getOrNull().orEmpty()
+                com.glasses.app.util.AppLogger.i(TAG, "智能识图: 完成，结果长度=${answer.length}")
                 smartRecognitionRepository.publish(
                     SmartRecognitionResult(
                         imagePath = imagePath,

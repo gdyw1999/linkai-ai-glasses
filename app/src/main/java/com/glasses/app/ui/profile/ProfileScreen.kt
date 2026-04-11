@@ -854,8 +854,8 @@ fun CrashLogDialog(
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val crash = com.glasses.app.util.CrashLogHelper.readCrashLog(context)
             val app = com.glasses.app.util.AppLogger.readLog(context)
-            // 限制显示大小：最多显示末尾 32KB，避免大文件卡顿
-            val maxDisplay = 32 * 1024
+            // 限制显示大小：最多显示末尾 64KB，避免大文件卡顿
+            val maxDisplay = 64 * 1024
             crashLog = if (crash.length > maxDisplay) "...(已截取尾部)\n" + crash.takeLast(maxDisplay) else crash
             appLog = if (app.length > maxDisplay) "...(已截取尾部)\n" + app.takeLast(maxDisplay) else app
         }
