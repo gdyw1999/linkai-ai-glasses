@@ -23,6 +23,7 @@ class ApiKeyManager private constructor(context: Context) {
         private const val KEY_ALI_QWEN_VISION_MODEL = "ali_qwen_vision_model"
         private const val KEY_OPENCLAW_API_KEY = "openclaw_api_key"
         private const val KEY_OPENCLAW_APP_ID = "openclaw_app_id"
+        private const val KEY_LINKAI_APP_CODE = "linkai_app_code"
         
         @Volatile
         private var instance: ApiKeyManager? = null
@@ -175,6 +176,23 @@ class ApiKeyManager private constructor(context: Context) {
         return getOpenClawAppId().isNotEmpty()
     }
     
+    // ==================== LinkAI App Code ====================
+
+    /**
+     * 保存LinkAI App Code
+     * 用于指定LinkAI平台的工作流/应用
+     */
+    fun saveLinkAIAppCode(appCode: String) {
+        prefs.edit().putString(KEY_LINKAI_APP_CODE, appCode).apply()
+    }
+
+    /**
+     * 获取LinkAI App Code
+     */
+    fun getLinkAIAppCode(): String {
+        return prefs.getString(KEY_LINKAI_APP_CODE, "") ?: ""
+    }
+
     // ==================== 通用方法 ====================
     
     /**

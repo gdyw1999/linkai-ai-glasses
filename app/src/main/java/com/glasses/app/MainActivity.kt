@@ -135,9 +135,9 @@ fun MainScreen() {
                 }
             )
         }
-    ) {
-        // 导航内容
-        NavGraph(navController)
+    ) { innerPadding ->
+        // 导航内容（传入 Scaffold 的 padding 避免被底部导航栏遮住）
+        NavGraph(navController, innerPadding)
     }
 }
 

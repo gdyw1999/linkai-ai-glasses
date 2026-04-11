@@ -225,7 +225,8 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
         aliQwenVisionKey: String,
         aliQwenVisionModel: String,
         openclawKey: String,
-        openclawAppId: String
+        openclawAppId: String,
+        linkaiAppCode: String
     ) {
         viewModelScope.launch {
             try {
@@ -250,6 +251,8 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
                 if (openclawAppId.isNotEmpty()) {
                     apiKeyManager.saveOpenClawAppId(openclawAppId)
                 }
+                // app_code 允许清空（用户可能想删除），所以始终保存
+                apiKeyManager.saveLinkAIAppCode(linkaiAppCode)
                 
                 _uiState.value = _uiState.value.copy(
                     statusMessage = "API配置已保存",

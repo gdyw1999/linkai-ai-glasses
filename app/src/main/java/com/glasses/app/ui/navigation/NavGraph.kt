@@ -1,5 +1,6 @@
 package com.glasses.app.ui.navigation
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -25,13 +26,14 @@ object NavRoutes {
  * 导航图
  */
 @Composable
-fun NavGraph(navController: NavHostController) {
+fun NavGraph(navController: NavHostController, innerPadding: PaddingValues = PaddingValues()) {
     NavHost(
         navController = navController,
         startDestination = NavRoutes.HOME
     ) {
         composable(NavRoutes.HOME) {
             HomeScreen(
+                innerPadding = innerPadding,
                 onNavigateToDeviceScan = {
                     navController.navigate(NavRoutes.DEVICE_SCAN)
                 }
@@ -45,13 +47,13 @@ fun NavGraph(navController: NavHostController) {
             )
         }
         composable(NavRoutes.CHAT) {
-            ChatScreen()
+            ChatScreen(innerPadding = innerPadding)
         }
         composable(NavRoutes.GALLERY) {
-            GalleryScreen()
+            GalleryScreen(innerPadding = innerPadding)
         }
         composable(NavRoutes.PROFILE) {
-            ProfileScreen()
+            ProfileScreen(innerPadding = innerPadding)
         }
     }
 }

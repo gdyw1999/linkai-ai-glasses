@@ -31,6 +31,10 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
+import java.io.FileWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.coroutines.resume
 
 /**
@@ -52,7 +56,12 @@ data class HomeUiState(
  * 首页ViewModel
  * 管理设备连接状态、电量、媒体采集等功能
  */
-class HomeViewModel(private val context: Context) : ViewModel() {
+// 使用 applicationContext 避免内存泄漏
+@android.annotation.SuppressLint("StaticFieldLeak")
+class HomeViewModel(context: Context) : ViewModel() {
+    private val context: Context = context.applicationContext
+    // 保留 Activity 引用用于弹出对话框等 UI 操作（弱引用避免泄漏）
+    private val activityContext: android.app.Activity? = context as? android.app.Activity
     
     companion object {
         private const val TAG = "HomeViewModel"
@@ -154,8 +163,8 @@ class HomeViewModel(private val context: Context) : ViewModel() {
                     deviceName = "未连接",
                     statusMessage = "设备已断开"
                 )
-                // 停止前台服务
-                stopForegroundService()
+                // 停止前台服务（捕获权限异常）
+                try { stopForegroundService() } catch (_: SecurityException) { }
             }
             ConnectionState.CONNECTING -> {
                 _uiState.value = _uiState.value.copy(
@@ -164,6 +173,7 @@ class HomeViewModel(private val context: Context) : ViewModel() {
                 )
             }
             ConnectionState.CONNECTED -> {
+                @android.annotation.SuppressLint("MissingPermission")
                 val deviceName = sdkManager?.getCurrentDevice()?.name ?: "已连接"
                 _uiState.value = _uiState.value.copy(
                     isConnected = true,
@@ -172,8 +182,8 @@ class HomeViewModel(private val context: Context) : ViewModel() {
                 )
                 // 连接成功后查询电量
                 queryBattery()
-                // 启动前台服务
-                startForegroundService()
+                // 启动前台服务（捕获权限异常）
+                try { startForegroundService() } catch (_: SecurityException) { }
             }
         }
     }
@@ -182,6 +192,7 @@ class HomeViewModel(private val context: Context) : ViewModel() {
      * 启动前台服务
      * 保持蓝牙连接和语音唤醒监听
      */
+    @android.annotation.SuppressLint("MissingPermission")
     private fun startForegroundService() {
         try {
             Log.d(TAG, "Starting foreground service...")
@@ -189,7 +200,7 @@ class HomeViewModel(private val context: Context) : ViewModel() {
             Log.d(TAG, "Foreground service start request sent")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start foreground service", e)
-            writeCrashLog("Foreground service start failed", e)
+            writeCrashLog(e)
             _uiState.value = _uiState.value.copy(
                 statusMessage = "后台服务启动失败，部分功能可能受限"
             )
@@ -201,27 +212,26 @@ class HomeViewModel(private val context: Context) : ViewModel() {
      * 包括电池优化和华为设备保活引导
      */
     fun requestBackgroundPermissions() {
-        // 如果是华为设备，显示保活引导
-        if (HuaweiProtectedAppsHelper.isHuaweiDevice()) {
-            HuaweiProtectedAppsHelper.showProtectedAppsGuide(context)
-        }
-        
-        // 请求忽略电池优化
-        if (context is android.app.Activity) {
-            BatteryOptimizationHelper.requestIgnoreBatteryOptimization(context)
+        val activity = activityContext ?: return
+        if (activity.isFinishing || activity.isDestroyed) return
+
+        try {
+            // 如果是华为设备，显示保活引导
+            if (HuaweiProtectedAppsHelper.isHuaweiDevice()) {
+                HuaweiProtectedAppsHelper.showProtectedAppsGuide(activity)
+            }
+
+            // 请求忽略电池优化
+            BatteryOptimizationHelper.requestIgnoreBatteryOptimization(activity)
+        } catch (e: Exception) {
+            Log.w(TAG, "请求后台权限失败", e)
         }
     }
-    
-    /**
-     * 显示厂商特定的保活引导
-     */
-    fun showManufacturerGuide() {
-        BatteryOptimizationHelper.showManufacturerSpecificGuide(context)
-    }
-    
+
     /**
      * 停止前台服务
      */
+    @android.annotation.SuppressLint("MissingPermission")
     private fun stopForegroundService() {
         try {
             GlassesConnectionService.stopService(context)
@@ -273,7 +283,7 @@ class HomeViewModel(private val context: Context) : ViewModel() {
         
         // 10秒后自动停止扫描
         viewModelScope.launch {
-            kotlinx.coroutines.delay(10000)
+            delay(10000)
             if (_uiState.value.isScanning) {
                 stopScan()
             }
@@ -309,22 +319,7 @@ class HomeViewModel(private val context: Context) : ViewModel() {
             }
         }
     }
-    
-    /**
-     * 断开连接
-     */
-    fun disconnect() {
-        viewModelScope.launch {
-            val result = sdkManager?.disconnect()
-            result?.onSuccess {
-                Log.d(TAG, "Disconnected successfully")
-            }?.onFailure { e ->
-                Log.e(TAG, "Failed to disconnect", e)
-                _uiState.value = _uiState.value.copy(statusMessage = "断开失败: ${e.message}")
-            }
-        }
-    }
-    
+
     /**
      * 查询电量
      * 电量通过 GlassesDeviceNotifyListener 回调自动更新，
@@ -353,7 +348,7 @@ class HomeViewModel(private val context: Context) : ViewModel() {
      */
     fun takePhoto() {
         _uiState.value = _uiState.value.copy(isLoading = true, statusMessage = "正在拍照...")
-        mediaCaptureManager?.takePhoto { success, message ->
+        mediaCaptureManager?.takePhoto { _, message ->
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 statusMessage = message
@@ -385,7 +380,7 @@ class HomeViewModel(private val context: Context) : ViewModel() {
      * 停止录像
      */
     fun stopVideo() {
-        mediaCaptureManager?.stopVideo { success, message ->
+        mediaCaptureManager?.stopVideo { _, message ->
             _uiState.value = _uiState.value.copy(
                 isRecording = false,
                 statusMessage = message
@@ -417,7 +412,7 @@ class HomeViewModel(private val context: Context) : ViewModel() {
      * 停止录音
      */
     fun stopAudio() {
-        mediaCaptureManager?.stopAudio { success, message ->
+        mediaCaptureManager?.stopAudio { _, message ->
             _uiState.value = _uiState.value.copy(
                 isRecording = false,
                 statusMessage = message
@@ -541,45 +536,66 @@ class HomeViewModel(private val context: Context) : ViewModel() {
 
     private suspend fun syncAndGetLatestImagePath(): String? {
         val latestBefore = getLatestImagePath()
+        Log.d(TAG, "syncAndGetLatestImagePath: 现有最新图片 = $latestBefore")
+
+        // 拍照后等 3 秒，让眼镜端将照片保存到相册再开始同步
+        Log.d(TAG, "syncAndGetLatestImagePath: 等待眼镜端保存照片...")
+        delay(3000)
+
         val syncStartResult = startSyncSuspend()
+        Log.d(TAG, "syncAndGetLatestImagePath: 同步启动结果 = $syncStartResult")
         if (!syncStartResult.first) {
-            Log.w(TAG, "Start sync failed, fallback to local image: ${syncStartResult.second}")
+            Log.w(TAG, "syncAndGetLatestImagePath: 同步启动失败，回退到本地最新图片")
             return latestBefore ?: getLatestImagePath()
         }
 
         // 轮询等待新图片同步完成，超时后返回最新可用图片
+        @Suppress("EXPLICIT_TYPE_ARGUMENTS")
         return withTimeoutOrNull<String?>(SYNC_WAIT_TIMEOUT_MS) {
+            var pollCount = 0
             while (true) {
                 val latest = getLatestImagePath()
+                pollCount++
+                if (pollCount % 4 == 1) {
+                    // 每 2 秒打一次日志，避免刷屏
+                    Log.d(TAG, "syncAndGetLatestImagePath: 第${pollCount}次轮询, latest=$latest")
+                }
                 if (!latest.isNullOrEmpty() && latest != latestBefore) {
+                    Log.d(TAG, "syncAndGetLatestImagePath: 发现新图片 $latest")
                     return@withTimeoutOrNull latest
                 }
                 delay(500)
             }
             @Suppress("UNREACHABLE_CODE") null // while(true) 不会执行到此处，仅满足类型推断
-        } ?: getLatestImagePath()
+        } ?: getLatestImagePath().also {
+            Log.w(TAG, "syncAndGetLatestImagePath: 轮询超时，回退图片=$it")
+        }
     }
 
     private suspend fun getLatestImagePath(): String? = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        // 来源1：从 MediaSyncManager 的同步回调列表中查找
         val syncImagePath = mediaSyncManager?.mediaFiles
             ?.value
             ?.firstOrNull { it.type == MediaType.IMAGE && File(it.filePath).exists() }
             ?.filePath
         if (!syncImagePath.isNullOrEmpty()) {
+            Log.d(TAG, "getLatestImagePath: 从同步列表找到 $syncImagePath")
             return@withContext syncImagePath
         }
 
+        // 来源2：直接扫描相册目录
         val albumDir = File(albumDirPath)
         if (!albumDir.exists() || !albumDir.isDirectory) {
+            Log.d(TAG, "getLatestImagePath: 相册目录不存在 $albumDirPath")
             return@withContext null
         }
 
-        albumDir.listFiles()
+        val files = albumDir.listFiles()
             ?.filter { file ->
                 file.isFile && file.extension.lowercase() in setOf("jpg", "jpeg", "png")
             }
-            ?.maxByOrNull { it.lastModified() }
-            ?.absolutePath
+        Log.d(TAG, "getLatestImagePath: 相册目录扫描到 ${files?.size ?: 0} 张图片")
+        files?.maxByOrNull { it.lastModified() }?.absolutePath
     }
     
     override fun onCleared() {
@@ -589,18 +605,18 @@ class HomeViewModel(private val context: Context) : ViewModel() {
     }
     
     /**
-     * 写入崩溃日志到文件
+     * 写入崩溃日志到文件（固定记录前台服务启动失败场景）
      */
-    private fun writeCrashLog(message: String, throwable: Throwable) {
+    private fun writeCrashLog(throwable: Throwable) {
         try {
-            val crashDir = java.io.File(context.getExternalFilesDir(null), ".")
+            val crashDir = File(context.getExternalFilesDir(null), ".")
             if (!crashDir.exists()) crashDir.mkdirs()
-            val crashFile = java.io.File(crashDir, "crash_log.txt")
-            val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
-                .format(java.util.Date())
-            java.io.FileWriter(crashFile, true).use { writer ->
+            val crashFile = File(crashDir, "crash_log.txt")
+            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                .format(Date())
+            FileWriter(crashFile, true).use { writer ->
                 writer.append("=== VIEWMODEL ERROR $timestamp ===\n")
-                writer.append("Message: $message\n")
+                writer.append("Message: Foreground service start failed\n")
                 writer.append("Exception: ${throwable.javaClass.name}\n")
                 writer.append("Error: ${throwable.message}\n")
                 writer.append("Stack trace:\n")

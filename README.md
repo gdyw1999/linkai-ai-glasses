@@ -161,13 +161,21 @@ cd linkai-ai-glasses
 
 ### API配置
 
-在“我的 -> API配置”中支持以下配置项：
+在”我的 -> API配置”中支持以下配置项：
 
 - LinkAI语音 API Key
 - LinkAI对话 API Key
+- **LinkAI App Code**（可选，用于指定 LinkAI 后台工作流）
 - 阿里Qwen识图 API Key（DashScope）
 - 阿里Qwen识图模型
 - OpenClaw API Key / 应用ID（预留）
+
+### 文本输入对话
+
+AI 对话页底部支持：
+- **文本输入框** — 手动打字发送消息，直接调用 LinkAI LLM 流式对话
+- **语音按钮** — 按住录音，经 ASR → LLM → TTS 完整流程
+- 两种方式均支持通过 App Code 指定 LinkAI 工作流
 
 ---
 

@@ -29,6 +29,7 @@ import com.glasses.app.viewmodel.HomeViewModelFactory
  */
 @Composable
 fun HomeScreen(
+    innerPadding: PaddingValues = PaddingValues(),
     onNavigateToDeviceScan: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(LocalContext.current))
 ) {
@@ -50,6 +51,7 @@ fun HomeScreen(
             .fillMaxSize()
             .background(Color(0xFFF8F9FA))
             .verticalScroll(rememberScrollState())
+            .padding(innerPadding)
     ) {
         // 顶部状态栏
         TopStatusBar(
@@ -80,7 +82,13 @@ fun HomeScreen(
             )
             
             Spacer(modifier = Modifier.height(32.dp))
-            
+
+            // 状态信息（放在快捷功能上方，错误提示更容易被看到）
+            if (uiState.statusMessage.isNotEmpty()) {
+                StatusMessageCard(message = uiState.statusMessage)
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // 快捷功能区标题
             Text(
                 text = "快捷功能",
@@ -103,13 +111,7 @@ fun HomeScreen(
             )
             
             Spacer(modifier = Modifier.height(32.dp))
-            
-            // 状态信息
-            if (uiState.statusMessage.isNotEmpty()) {
-                StatusMessageCard(message = uiState.statusMessage)
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-            
+
             // 录制时长显示
             if (uiState.isRecording) {
                 RecordingDurationCard(duration = uiState.recordingDuration)
@@ -539,7 +541,9 @@ fun StatusMessageCard(message: String) {
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodySmall,
                 fontSize = 13.sp,
-                color = Color(0xFF424242)
+                color = Color(0xFF424242),
+                softWrap = true,
+                lineHeight = 18.sp
             )
         }
     }

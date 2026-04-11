@@ -35,6 +35,7 @@ import java.util.*
  */
 @Composable
 fun ChatScreen(
+    innerPadding: PaddingValues = PaddingValues(),
     viewModel: ChatViewModel = viewModel(factory = ChatViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -46,7 +47,7 @@ fun ChatScreen(
         }
     }
     
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -88,7 +89,8 @@ fun ChatScreen(
                 isProcessing = uiState.isProcessing,
                 onStartRecording = { viewModel.startRecording() },
                 onStopRecording = { viewModel.stopRecording() },
-                onInterrupt = { viewModel.interrupt() }
+                onInterrupt = { viewModel.interrupt() },
+                onSendText = { text -> viewModel.sendTextMessage(text) }
             )
         }
         
@@ -288,6 +290,7 @@ fun StatusBar(message: String) {
 
 /**
  * 底部控制栏
+ * 包含文本输入框、语音按钮、发送按钮
  */
 @Composable
 fun ChatControlBar(
@@ -295,48 +298,96 @@ fun ChatControlBar(
     isProcessing: Boolean,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
-    onInterrupt: () -> Unit
+    onInterrupt: () -> Unit,
+    onSendText: (String) -> Unit
 ) {
+    // 文本输入状态，在重组之间保持
+    var inputText by remember { mutableStateOf("") }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         color = Color.White,
         shape = RoundedCornerShape(12.dp),
         shadowElevation = 4.dp
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // 录音按钮
             if (!isRecording && !isProcessing) {
-                Button(
-                    onClick = onStartRecording,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2196F3)
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = 4.dp,
-                        pressedElevation = 8.dp
-                    )
+                // 空闲状态：文本输入框 + 语音/发送按钮
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                    // 文本输入框
+                    OutlinedTextField(
+                        value = inputText,
+                        onValueChange = { inputText = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = {
+                            Text(
+                                text = "输入消息...",
+                                color = Color(0xFFBDBDBD),
+                                fontSize = 14.sp
+                            )
+                        },
+                        maxLines = 4,
+                        shape = RoundedCornerShape(20.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF2196F3),
+                            unfocusedBorderColor = Color(0xFFE0E0E0),
+                            cursorColor = Color(0xFF2196F3)
+                        ),
+                        // 软键盘"发送"动作
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "按住说话",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
+
+                    // 语音按钮（输入框为空时显示）
+                    if (inputText.isBlank()) {
+                        IconButton(
+                            onClick = onStartRecording,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(
+                                    Color(0xFF2196F3),
+                                    RoundedCornerShape(22.dp)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "语音输入",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    } else {
+                        // 发送按钮（输入框有文字时显示）
+                        IconButton(
+                            onClick = {
+                                if (inputText.isNotBlank()) {
+                                    onSendText(inputText.trim())
+                                    inputText = ""
+                                }
+                            },
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(
+                                    Color(0xFF2196F3),
+                                    RoundedCornerShape(22.dp)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = "发送",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
                 }
             } else if (isRecording) {
                 // 录音中 - 显示停止按钮和打断按钮

@@ -31,6 +31,7 @@ import com.glasses.app.viewmodel.ProfileViewModelFactory
  */
 @Composable
 fun ProfileScreen(
+    innerPadding: PaddingValues = PaddingValues(),
     viewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -41,6 +42,7 @@ fun ProfileScreen(
             .fillMaxSize()
             .background(Color(0xFFF8F9FA))
             .verticalScroll(rememberScrollState())
+            .padding(innerPadding)
     ) {
         // 顶部栏
         ProfileTopBar()
@@ -161,8 +163,8 @@ fun ProfileScreen(
     if (uiState.showApiConfigDialog) {
         ApiConfigDialog(
             onDismiss = { viewModel.hideApiConfig() },
-            onSave = { voiceKey, chatKey, aliVisionKey, aliVisionModel, openclawKey, openclawAppId ->
-                viewModel.saveApiConfig(voiceKey, chatKey, aliVisionKey, aliVisionModel, openclawKey, openclawAppId)
+            onSave = { voiceKey, chatKey, aliVisionKey, aliVisionModel, openclawKey, openclawAppId, linkaiAppCode ->
+                viewModel.saveApiConfig(voiceKey, chatKey, aliVisionKey, aliVisionModel, openclawKey, openclawAppId, linkaiAppCode)
             }
         )
     }
@@ -586,7 +588,7 @@ fun FAQItem(question: String, answer: String) {
 @Composable
 fun ApiConfigDialog(
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String, String, String) -> Unit
+    onSave: (String, String, String, String, String, String, String) -> Unit
 ) {
     val context = LocalContext.current
     val apiKeyManager = remember { com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context) }
@@ -598,6 +600,7 @@ fun ApiConfigDialog(
     var aliQwenVisionModel by remember { mutableStateOf(apiKeyManager.getAliQwenVisionModel()) }
     var openclawKey by remember { mutableStateOf(apiKeyManager.getOpenClawApiKey()) }
     var openclawAppId by remember { mutableStateOf(apiKeyManager.getOpenClawAppId()) }
+    var linkaiAppCode by remember { mutableStateOf(apiKeyManager.getLinkAIAppCode()) }
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -688,6 +691,17 @@ fun ApiConfigDialog(
                     onValueChange = { linkaiChatKey = it },
                     label = { Text("对话API Key (LLM)", fontSize = 12.sp) },
                     placeholder = { Text("请输入LinkAI对话API Key", fontSize = 12.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp)
+                )
+
+                // LinkAI App Code（工作流配置）
+                OutlinedTextField(
+                    value = linkaiAppCode,
+                    onValueChange = { linkaiAppCode = it },
+                    label = { Text("App Code (工作流)", fontSize = 12.sp) },
+                    placeholder = { Text("可选，填入后在LinkAI后台配置工作流", fontSize = 12.sp) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(8.dp)
@@ -802,7 +816,8 @@ fun ApiConfigDialog(
                             aliQwenVisionKey,
                             aliQwenVisionModel,
                             openclawKey,
-                            openclawAppId
+                            openclawAppId,
+                            linkaiAppCode
                         )
                     },
                     colors = ButtonDefaults.buttonColors(

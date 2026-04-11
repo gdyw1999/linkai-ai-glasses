@@ -80,6 +80,9 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     
     // 当前会话ID
     private var currentConversationId: Long = 0L
+
+    // 从 ApiKeyManager 读取 LinkAI App Code
+    private val apiKeyManager by lazy { com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context) }
     
     init {
         // 初始化对话
@@ -243,6 +246,63 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
     
     /**
+     * 发送文本消息（手动输入）
+     * 跳过 ASR，直接进入 LLM 流式对话
+     */
+    fun sendTextMessage(text: String) {
+        if (text.isBlank()) return
+
+        viewModelScope.launch {
+            try {
+                // 添加用户消息到UI
+                addUserMessage(text.trim())
+
+                // 保存用户消息到数据库
+                conversationRepository.addMessage(
+                    conversationId = currentConversationId,
+                    content = text.trim(),
+                    role = "user"
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = true,
+                    statusMessage = "AI思考中..."
+                )
+
+                // 流式对话生成（携带 app_code 以指定 LinkAI 工作流）
+                val sessionId = currentConversationId.toString()
+                val appCode = apiKeyManager.getLinkAIAppCode().ifEmpty { null }
+                aiService.chatStreaming(text.trim(), sessionId, appCode).collect { textChunk ->
+                    streamingChatManager.processStreamingText(textChunk)
+                }
+
+                // 流式对话完成
+                streamingChatManager.finalize()
+
+                // 保存AI消息到数据库
+                val aiText = streamingChatManager.displayText.value
+                conversationRepository.addMessage(
+                    conversationId = currentConversationId,
+                    content = aiText,
+                    role = "assistant"
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = false,
+                    statusMessage = ""
+                )
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send text message", e)
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = false,
+                    statusMessage = "发送失败: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /**
      * 处理录音文件
      */
     private fun processRecordedAudio(audioFile: File) {
@@ -280,9 +340,10 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                     statusMessage = "AI思考中..."
                 )
                 
-                // 2. LLM - 流式对话生成
+                // 2. LLM - 流式对话生成（携带 app_code 以指定 LinkAI 工作流）
                 val sessionId = currentConversationId.toString()
-                aiService.chatStreaming(userText, sessionId).collect { textChunk ->
+                val appCode = apiKeyManager.getLinkAIAppCode().ifEmpty { null }
+                aiService.chatStreaming(userText, sessionId, appCode).collect { textChunk ->
                     // 处理流式文本
                     streamingChatManager.processStreamingText(textChunk)
                 }

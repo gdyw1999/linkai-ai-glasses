@@ -35,6 +35,7 @@ import java.io.File
  */
 @Composable
 fun GalleryScreen(
+    innerPadding: PaddingValues = PaddingValues(),
     viewModel: GalleryViewModel = viewModel(factory = GalleryViewModelFactory(LocalContext.current))
 ) {
     val context = LocalContext.current
@@ -61,6 +62,7 @@ fun GalleryScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF8F9FA))
+            .padding(innerPadding)
     ) {
         // 顶部栏
         GalleryTopBar(

@@ -2,6 +2,54 @@
 
 All notable changes to the Linkai星韵AI眼镜Android App project will be documented in this file.
 
+## [0.211] - 2026-04-11
+
+### Added - AI 对话页文本输入 + LinkAI 工作流
+
+- **AI 对话页新增文本输入框**
+  - 底部控制栏从纯语音按钮改为「文本输入框 + 语音/发送按钮」
+  - 输入框为空时显示语音按钮，输入文字后自动切换为发送按钮
+  - 新增 `ChatViewModel.sendTextMessage()` 跳过 ASR 直接进入 LLM 流式对话
+
+- **LinkAI App Code（工作流）配置**
+  - API 配置页新增 "App Code (工作流)" 输入项
+  - 对话请求自动携带 `app_code` 参数，可在 LinkAI 后台配置自定义工作流
+  - `ApiKeyManager` 新增 `saveLinkAIAppCode()` / `getLinkAIAppCode()`
+
+### Fixed - 稳定性修复
+
+- **修复蓝牙连接后崩溃**（`BadTokenException`）
+  - 原因：`applicationContext` 无法弹 AlertDialog（华为保活引导）
+  - 修复：ViewModel 构造时额外保存 `activityContext`，弹 Dialog 时使用并检查 Activity 生命周期
+
+- **修复智能识图"未找到可识别的图片"**
+  - 原因：拍照后立即调 `importAlbum()`，眼镜端尚未保存照片
+  - 修复：拍照成功后 `delay(3000)` 再启动同步，同步轮询加详细日志
+
+- **修复所有页面底部内容被导航栏遮住**
+  - 原因：`Scaffold` 的 `innerPadding` 未传递给页面组件
+  - 修复：`MainActivity` → `NavGraph` → Home / Chat / Gallery / Profile 均接收 `innerPadding`
+
+- **修复 HomeScreen 状态提示显示不全**
+  - 状态消息卡片从快捷按钮下方移到上方，错误提示更显眼
+  - 文字加 `softWrap` + `lineHeight` 确保长消息完整换行
+
+- **修复 AIServiceImpl.kt 编译错误**（24 项）
+  - Gson API 兼容：`JsonParser.parseString()` → `JsonParser().parse()`，`choices[0]` → `choices.get(0)`
+  - 移除未使用的 `getVoiceApiKey()` / `getChatApiKey()`
+
+- **修复 HomeViewModel.kt 代码问题**（13 项）
+  - Context 泄漏：构造参数改为 `context.applicationContext`
+  - 未使用函数/参数清理：移除 `disconnect()`、`showManufacturerGuide()`，`success` 改名 `_`
+  - `writeCrashLog` 简化：移除固定 message 参数，去除冗余限定符
+
+- **修复 HomeViewModel.kt 权限警告**
+  - 前台服务和蓝牙操作加 `@SuppressLint("MissingPermission")` + try-catch
+
+### Changed
+
+- 版本号从 `1.0.0` 改为 `0.xxx` 格式，当前 `0.211`（versionCode 同步）
+
 ## [1.3.0] - 2026-04-11
 
 ### Changed - 智能识图链路调整
