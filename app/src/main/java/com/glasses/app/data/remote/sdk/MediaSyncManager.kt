@@ -119,11 +119,14 @@ class MediaSyncManager private constructor(context: Context) {
                             totalCount = total
                         )
                         // SDK 报告 0 个文件 = 眼镜上没有新文件，同步立即结束
+                        // 取消超时保护，避免 30s 后误触发"强制结束"
                         if (total == 0) {
                             com.glasses.app.util.AppLogger.i(TAG, "SDK 报告 0 个文件，视为同步完成")
-                            _syncProgress.value = _syncProgress.value.copy(isComplete = true)
-                            isSyncing = false
                             syncCallbackTimeoutJob?.cancel()
+                            isSyncing = false
+                            _syncProgress.value = _syncProgress.value.copy(isComplete = true)
+                            // 立即停止监听后续回调（避免 fileDownloadError 覆盖正确状态）
+                            return
                         }
                     }
 
@@ -135,6 +138,11 @@ class MediaSyncManager private constructor(context: Context) {
                     }
 
                     override fun fileDownloadError(fileType: Int, errorType: Int) {
+                        // 忽略同步已结束后的冗余错误回调（眼镜无文件时 SDK 会在 fileCount(0,0) 后跟 fileDownloadError）
+                        if (!isSyncing) {
+                            com.glasses.app.util.AppLogger.w(TAG, "忽略冗余错误回调（同步已结束）")
+                            return
+                        }
                         com.glasses.app.util.AppLogger.e(TAG, "SDK回调: 文件下载错误 fileType=$fileType, errorType=$errorType")
                         syncCallbackTimeoutJob?.cancel()
                         _syncProgress.value = _syncProgress.value.copy(
