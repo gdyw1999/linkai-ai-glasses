@@ -11,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,7 +24,10 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +62,10 @@ fun ChatScreen(
     var showImageSourceSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // 眼镜相册面板状态
+    var showGlassesAlbumSheet by remember { mutableStateOf(false) }
+    val glassesAlbumSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     // 最近图片（从 MediaSyncManager 取，自动响应 mediaFiles 变化）
     val recentImages by remember {
         derivedStateOf {
@@ -70,7 +79,12 @@ fun ChatScreen(
     val phoneAlbumLauncher = rememberLauncherForActivityResult(
         contract = PickVisualMediaContract()
     ) { uri: Uri? ->
-        uri?.let { handlePhoneAlbumImage(context, it) }
+        uri?.let {
+            val file = copyUriToTempFile(context, it)
+            file?.let { f ->
+                viewModel.recognizeImageAndSend(f.absolutePath, f.name)
+            }
+        }
         showImageSourceSheet = false
     }
 
@@ -79,9 +93,14 @@ fun ChatScreen(
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success: Boolean ->
-        // Note: The temp photo file is already created before launch.
-        // pendingCameraUri contains the path to the temp file.
-        // T-004 will add the recognizeImageAndSend call here.
+        if (success) {
+            // The temp photo file is already created before launch.
+            // Find it by pattern and send for recognition
+            val files = context.cacheDir.listFiles { _, name -> name.startsWith("IMG_") && name.endsWith(".jpg") }
+            files?.maxByOrNull { it.lastModified() }?.let { f ->
+                viewModel.recognizeImageAndSend(f.absolutePath, f.name)
+            }
+        }
         pendingCameraUri = null
         showImageSourceSheet = false
     }
@@ -177,10 +196,15 @@ fun ChatScreen(
                             pendingCameraUri = uri
                             cameraLauncher.launch(uri)
                         }
-                        ImageSource.ALBUM_GLASSES, ImageSource.CAMERA_GLASSES -> {
-                            // 眼镜相关：关闭面板，由 T-005 处理
+                        ImageSource.ALBUM_GLASSES -> {
+                            // 眼镜相册：展开 GlassesAlbumSheet
                             showImageSourceSheet = false
-                            Toast.makeText(context, "请先连接眼镜", Toast.LENGTH_SHORT).show()
+                            showGlassesAlbumSheet = true
+                        }
+                        ImageSource.CAMERA_GLASSES -> {
+                            // 眼镜拍照 + 分析
+                            showImageSourceSheet = false
+                            viewModel.glassesCameraAndAnalyze()
                         }
                     }
                 },
@@ -188,6 +212,25 @@ fun ChatScreen(
                     showImageSourceSheet = false
                     viewModel.recognizeImageAndSend(media.filePath, media.fileName)
                 }
+            )
+        }
+
+        // 眼镜相册选择面板
+        if (showGlassesAlbumSheet) {
+            val glassesImageFiles by remember {
+                derivedStateOf {
+                    MediaSyncManager.getInstance(context).mediaFiles.value
+                        .filter { it.type == MediaType.IMAGE }
+                }
+            }
+            GlassesAlbumSheet(
+                sheetState = glassesAlbumSheetState,
+                mediaFiles = glassesImageFiles,
+                onMediaSelected = { media ->
+                    showGlassesAlbumSheet = false
+                    viewModel.recognizeImageAndSend(media.filePath, media.fileName)
+                },
+                onDismiss = { showGlassesAlbumSheet = false }
             )
         }
     }
@@ -860,22 +903,23 @@ private fun formatTimestamp(timestamp: Long): String {
 }
 
 /**
- * 处理手机相册选择的图片
+ * 复制 URI 到临时文件并返回 File 对象
  */
-private fun handlePhoneAlbumImage(context: android.content.Context, uri: Uri) {
-    try {
-        val inputStream = context.contentResolver.openInputStream(uri)
+private fun copyUriToTempFile(context: android.content.Context, uri: Uri): File? {
+    return try {
+        val inputStream = context.contentResolver.openInputStream(uri) ?: return null
         val file = createTempImageFile(context)
-        inputStream?.use { input ->
+        inputStream.use { input ->
             file.outputStream().use { output ->
                 input.copyTo(output)
             }
         }
-        val filePath = file.absolutePath
-        com.glasses.app.util.AppLogger.i("ChatScreen", "手机相册图片已复制到: $filePath")
-        // 临时文件交给 recognizeImageAndSend 处理
+        com.glasses.app.util.AppLogger.i("ChatScreen", "手机相册图片已复制到: ${file.absolutePath}")
+        file
     } catch (e: Exception) {
+        com.glasses.app.util.AppLogger.e("ChatScreen", "图片复制失败: ${e.message}", e)
         Toast.makeText(context, "图片读取失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        null
     }
 }
 
@@ -886,4 +930,82 @@ private fun createTempImageFile(context: android.content.Context): File {
     val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
     val storageDir = context.cacheDir
     return File.createTempFile("IMG_${timeStamp}_", ".jpg", storageDir)
+}
+
+/**
+ * 眼镜相册选择面板（内嵌 ModalBottomSheet）
+ */
+@Composable
+private fun GlassesAlbumSheet(
+    sheetState: SheetState,
+    mediaFiles: List<MediaFile>,
+    onMediaSelected: (MediaFile) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        containerColor = Color.White
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // 标题栏
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "眼镜相册",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF212121)
+                )
+                TextButton(onClick = onDismiss) {
+                    Text("取消", color = Color(0xFF757575))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 相册网格
+            if (mediaFiles.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("暂无图片，请先同步", color = Color(0xFF9E9E9E))
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.height(300.dp)
+                ) {
+                    items(mediaFiles) { media ->
+                        val imageModel = File(media.filePath).takeIf { it.exists() }
+                        Card(
+                            modifier = Modifier
+                                .aspectRatio(1f)
+                                .clickable { onMediaSelected(media) },
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(imageModel)
+                                    .crossfade(true).build(),
+                                contentDescription = media.fileName,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
 }
