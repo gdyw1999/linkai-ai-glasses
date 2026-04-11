@@ -43,7 +43,7 @@
 ├─────────────────────────────────────────────┤
 │  [StatusBar]                                │
 ├─────────────────────────────────────────────┤
-│  ═══  （拖拽手柄）              [× 关闭]    │
+│  ○ ○ ○  （拖拽手柄）              [× 关闭]    │
 ├─────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────┐   │
 │  │  核心功能区（2×2 网格）               │   │
@@ -52,12 +52,12 @@
 │  │  │  相册    │  │  相册    │         │   │
 │  │  └─────────┘  └─────────┘         │   │
 │  │  ┌─────────┐  ┌─────────┐         │   │
-│  │  │ 📸 手机  │  │ 🔭 眼镜  │         │   │
+│  │  │ 📷 手机  │  │ 🔭 眼镜  │         │   │
 │  │  │  拍照    │  │  拍照    │         │   │
 │  │  └─────────┘  └─────────┘         │   │
 │  └─────────────────────────────────────┘   │
 │                                             │
-│  最近图片网格（横向 4列，最近 N 张）           │
+│  最近图片网格（横向 4列，最近 8 张）           │
 │  ┌───┐┌───┐┌───┐┌───┐                     │
 │  │img││img││img││img│                     │
 │  └───┘└───┘└───┘└───┘                     │
@@ -190,6 +190,14 @@
 ## 5. 状态管理
 
 ```kotlin
+//图片来源枚举
+enum class ImageSource {
+    ALBUM_PHONE,    // 手机相册
+    ALBUM_GLASSES,  // 眼镜相册
+    CAMERA_PHONE,   // 手机拍照
+    CAMERA_GLASSES  // 眼镜拍照
+}
+
 // ChatScreen 新增状态
 var showImageSourceSheet by remember { mutableStateOf(false) }
 var recentImages by remember { mutableStateOf<List<MediaFile>>(emptyList()) }
@@ -200,7 +208,6 @@ fun closeImageSourceSheet() { showImageSourceSheet = false }
 
 // 选择图片来源
 fun onSourceSelected(source: ImageSource) {
-    // source = ALBUM_PHONE | ALBUM_GLASSES | CAMERA_PHONE | CAMERA_GLASSES
     // 触发对应逻辑，分析完成后 closeImageSourceSheet()
 }
 ```
