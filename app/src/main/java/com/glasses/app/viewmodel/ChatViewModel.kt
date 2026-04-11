@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.glasses.app.data.remote.api.AIServiceImpl
+import com.glasses.app.data.remote.sdk.MediaCaptureManager
+import com.glasses.app.data.remote.sdk.MediaSyncManager
 import com.glasses.app.data.repository.ConversationRepository
 import com.glasses.app.data.repository.SmartRecognitionRepository
 import com.glasses.app.data.repository.SmartRecognitionResult
@@ -13,11 +15,15 @@ import com.glasses.app.domain.usecase.StreamingChatManager
 import com.glasses.app.manager.AudioPlayer
 import com.glasses.app.manager.RecordingManager
 import com.glasses.app.manager.RecordingState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.File
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
 /**
  * 消息数据类
@@ -681,7 +687,202 @@ class ChatViewModel(private val context: Context) : ViewModel() {
             smartRecognitionRepository.clear(result.id)
         }
     }
-    
+
+    /**
+     * 识别图片并发送到对话（Qwen 多模态分析）
+     * @param imagePath 图片文件路径
+     * @param fileName 显示用的文件名
+     */
+    fun recognizeImageAndSend(imagePath: String, fileName: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isProcessing = true,
+                statusMessage = "正在分析图片..."
+            )
+            com.glasses.app.util.AppLogger.i(TAG, "用户操作: 分析图片 $fileName")
+
+            try {
+                // 1. 写用户消息
+                val userContent = "📷 分析图片: $fileName"
+                if (currentConversationId == 0L) {
+                    currentConversationId = conversationRepository.createConversation("图片分析")
+                    _uiState.value = _uiState.value.copy(
+                        currentConversationId = currentConversationId,
+                        conversationTitle = "图片分析"
+                    )
+                }
+                conversationRepository.addMessage(
+                    conversationId = currentConversationId,
+                    content = userContent,
+                    role = "user"
+                )
+                _uiState.value = _uiState.value.copy(
+                    messages = conversationRepository.getMessagesOnce(currentConversationId).map { entity ->
+                        Message(
+                            id = entity.id.toString(),
+                            content = entity.content,
+                            isUser = entity.role == "user",
+                            timestamp = entity.createdAt,
+                            audioUrl = entity.audioUrl
+                        )
+                    }
+                )
+
+                // 2. 调用 Qwen 分析
+                val appCode = apiKeyManager.getLinkAIAppCode().ifEmpty { null }
+                val result = aiService.recognizeImage(
+                    imagePath = imagePath,
+                    sessionId = "vision_${System.currentTimeMillis()}",
+                    appCode = appCode
+                )
+
+                // 3. 处理分析结果
+                result.fold(
+                    onSuccess = { analysisText ->
+                        com.glasses.app.util.AppLogger.i(TAG, "Qwen 分析完成，结果长度=${analysisText.length}")
+                        conversationRepository.addMessage(
+                            conversationId = currentConversationId,
+                            content = analysisText,
+                            role = "assistant"
+                        )
+                        _uiState.value = _uiState.value.copy(
+                            messages = conversationRepository.getMessagesOnce(currentConversationId).map { entity ->
+                                Message(
+                                    id = entity.id.toString(),
+                                    content = entity.content,
+                                    isUser = entity.role == "user",
+                                    timestamp = entity.createdAt,
+                                    audioUrl = entity.audioUrl
+                                )
+                            }
+                        )
+                    },
+                    onFailure = { error ->
+                        val errorMsg = "图片分析失败: ${error.message}"
+                        com.glasses.app.util.AppLogger.e(TAG, errorMsg, error)
+                        conversationRepository.addMessage(
+                            conversationId = currentConversationId,
+                            content = "图片分析失败，请重试。错误：${error.message}",
+                            role = "assistant"
+                        )
+                        _uiState.value = _uiState.value.copy(
+                            messages = conversationRepository.getMessagesOnce(currentConversationId).map { entity ->
+                                Message(
+                                    id = entity.id.toString(),
+                                    content = entity.content,
+                                    isUser = entity.role == "user",
+                                    timestamp = entity.createdAt,
+                                    audioUrl = entity.audioUrl
+                                )
+                            }
+                        )
+                    }
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = false,
+                    statusMessage = ""
+                )
+            } catch (e: Exception) {
+                val errorMsg = "图片分析异常: ${e.message}"
+                com.glasses.app.util.AppLogger.e(TAG, errorMsg, e)
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = false,
+                    statusMessage = errorMsg
+                )
+            }
+        }
+    }
+
+    /**
+     * 眼镜拍照并分析图片
+     * 完整流程：拍照 -> 等3秒 -> 同步 -> 获取最新图片 -> Qwen 分析
+     */
+    fun glassesCameraAndAnalyze() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isProcessing = true,
+                statusMessage = "正在拍照..."
+            )
+            com.glasses.app.util.AppLogger.i(TAG, "用户操作: 眼镜拍照并分析")
+
+            try {
+                // 1. 获取 MediaCaptureManager 和 MediaSyncManager
+                val captureManager = MediaCaptureManager.getInstance(context)
+                val syncManager = MediaSyncManager.getInstance(context)
+
+                // 2. 拍照
+                val photoResult = suspendCancellableCoroutine { continuation ->
+                    captureManager.takePhoto { success, message ->
+                        if (continuation.isActive) {
+                            continuation.resume(success to message)
+                        }
+                    }
+                }
+                if (!photoResult.first) {
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        statusMessage = "拍照失败: ${photoResult.second}"
+                    )
+                    return@launch
+                }
+
+                _uiState.value = _uiState.value.copy(statusMessage = "拍照成功，等待同步...")
+
+                // 3. 等眼镜端保存照片
+                delay(3000)
+
+                // 4. 启动同步
+                syncManager.startSync { success, message ->
+                    // SDK 的 startSync 是异步的，这里用 suspendCancellableCoroutine 包装
+                }
+
+                // 5. 轮询获取最新图片（最多等20秒）
+                val latestImagePath = withTimeoutOrNull<String?>(20_000L) {
+                    val albumDirPath = File(context.getExternalFilesDir(null), "GlassesAlbum").absolutePath
+                    val albumDir = File(albumDirPath)
+                    val filesBefore = albumDir.listFiles()
+                        ?.filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png") }
+                        ?.map { it.absolutePath }
+                        ?.toSet()
+                        ?: emptySet()
+
+                    while (isActive) {
+                        delay(500)
+                        val filesAfter = albumDir.listFiles()
+                            ?.filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png") }
+                            ?.map { it.absolutePath }
+                            ?.toSet()
+                            ?: emptySet()
+                        val newFiles = filesAfter - filesBefore
+                        if (newFiles.isNotEmpty()) {
+                            return@withTimeoutOrNull newFiles.maxByOrNull { File(it).lastModified() }
+                        }
+                    }
+                    null
+                }
+
+                if (latestImagePath.isNullOrEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        statusMessage = "未找到新拍的照片，请重试"
+                    )
+                    return@launch
+                }
+
+                // 6. 调用 Qwen 分析
+                recognizeImageAndSend(latestImagePath, File(latestImagePath).name)
+            } catch (e: Exception) {
+                val errorMsg = "眼镜拍照分析异常: ${e.message}"
+                com.glasses.app.util.AppLogger.e(TAG, errorMsg, e)
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = false,
+                    statusMessage = errorMsg
+                )
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         // 释放资源
