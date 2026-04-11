@@ -41,7 +41,9 @@ import java.io.File
 @Composable
 fun GalleryScreen(
     innerPadding: PaddingValues = PaddingValues(),
-    viewModel: GalleryViewModel = viewModel(factory = GalleryViewModelFactory(LocalContext.current))
+    viewModel: GalleryViewModel = viewModel(factory = GalleryViewModelFactory(LocalContext.current)),
+    onMediaSelected: ((MediaFile) -> Unit)? = null,
+    onDismiss: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -70,10 +72,36 @@ fun GalleryScreen(
             .padding(innerPadding)
     ) {
         // 顶部栏
-        GalleryTopBar(
-            isSyncing = uiState.isSyncing,
-            onSync = { viewModel.startSync() }
-        )
+        if (onMediaSelected != null) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.White,
+                shadowElevation = 2.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "选择图片",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF212121)
+                    )
+                    TextButton(onClick = { onDismiss?.invoke() }) {
+                        Text("取消", color = Color(0xFF757575))
+                    }
+                }
+            }
+        } else {
+            GalleryTopBar(
+                isSyncing = uiState.isSyncing,
+                onSync = { viewModel.startSync() }
+            )
+        }
         
         // 类型筛选Tab
         MediaTypeTabBar(
@@ -102,7 +130,13 @@ fun GalleryScreen(
                 items(filteredMedia) { media ->
                     MediaGridItem(
                         media = media,
-                        onClick = { viewModel.openViewer(media) }
+                        onClick = {
+                            if (onMediaSelected != null) {
+                                onMediaSelected.invoke(media)
+                            } else {
+                                viewModel.openViewer(media)
+                            }
+                        }
                     )
                 }
             }
