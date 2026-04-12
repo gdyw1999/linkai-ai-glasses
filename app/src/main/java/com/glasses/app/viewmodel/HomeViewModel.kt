@@ -86,9 +86,8 @@ class HomeViewModel(context: Context) : ViewModel() {
     private val aiService by lazy { AIServiceImpl.getInstance(context) }
     private val smartRecognitionRepository by lazy { SmartRecognitionRepository.getInstance(context) }
     private val albumDirPath: String by lazy {
-        // 使用公共Pictures目录，卸载后仍保留
-        val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-        File(picturesDir, "星韵AI相册").absolutePath
+        // 使用 app-private 目录，SDK 内部用 File API 写入，公共目录在 Android 11+ 无权限
+        File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "星韵AI相册").absolutePath
     }
     
     // 充电状态 - 延迟初始化

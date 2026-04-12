@@ -62,10 +62,9 @@ class GalleryViewModel(context: Context) : ViewModel() {
     // 后端模块
     private val mediaSyncManager = MediaSyncManager.getInstance(context)
     
-    // 相册目录路径（使用公共Pictures目录，卸载后仍保留）
+    // 相册目录路径（使用 app-private 目录，SDK 内部用 File API 写入，公共目录在 Android 11+ 无权限）
     private val albumDirPath: String by lazy {
-        val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-        File(picturesDir, "星韵AI相册").absolutePath
+        File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "星韵AI相册").absolutePath
     }
     
     init {
