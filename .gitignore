@@ -95,3 +95,15 @@ lint/tmp/
 
 # IntelliJ (full)
 .idea/
+
+# Reference screenshots and materials
+src/
+tests/
+
+# Project management artifact files
+task.md
+walkthrough.md
+findings.md
+spec.md
+implementation_plan.md
+docs/superpowers/
