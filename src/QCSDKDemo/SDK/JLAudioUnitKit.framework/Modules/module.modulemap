@@ -1,6 +1,0 @@
-framework module JLAudioUnitKit {
-  umbrella header "JLAudioUnitKit.h"
-  export *
-
-  module * { export * }
-}
