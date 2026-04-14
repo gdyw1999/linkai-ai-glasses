@@ -96,6 +96,9 @@ lint/tmp/
 # IntelliJ (full)
 .idea/
 
+# Kiro specs
+.kiro/
+
 # Reference screenshots and materials
 src/
 tests/
