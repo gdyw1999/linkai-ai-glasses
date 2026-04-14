@@ -34,17 +34,18 @@ app/build/outputs/apk/debug/app-debug.apk
 版本号在 `app/build.gradle.kts` 中维护，格式为 `0.xxx`，每次改动 +1：
 
 ```kotlin
-versionCode = 211   // 与 versionName 同步递增
-versionName = "0.211"
+versionCode = 214   // 与 versionName 同步递增
+versionName = "0.214"
 ```
 
 ## 架构要点
 
 ### 导航与页面
 
-- `MainActivity.kt` — Scaffold + 底部导航栏，`innerPadding` 必须传给所有页面避免被导航栏遮住
-- `NavGraph.kt` — 路由定义，所有页面接收 `innerPadding: PaddingValues`
+- `MainActivity.kt` — Scaffold + 底部导航栏（Chat 页面全屏隐藏导航栏，其他页面正常显示）
+- `NavGraph.kt` — 路由定义，所有页面接收 `innerPadding: PaddingValues`；Chat 页面传 `PaddingValues(0)` 实现全屏
 - 4 个 Tab 页：Home / Chat / Gallery / Profile
+- Chat 页面：顶部返回按钮（`onBack`）导航回首页，导航栏随之恢复
 
 ### AI 服务链路
 
@@ -86,11 +87,35 @@ versionName = "0.211"
 
 - ViewModel 中必须用 `context.applicationContext` 避免内存泄漏；如需弹 Dialog 等操作，单独保存 `activityContext`
 - Gson 版本较旧，用 `JsonParser().parse()` 而非 `JsonParser.parseString()`，用 `choices.get(0)` 而非 `choices[0]`
-- 基础 Material Icons 集（无 extended 库），`Icons.Default.Mic` 等不可用，需用 `Settings` / `Send` 等替代
+- 基础 Material Icons 集（无 extended 库），`Icons.Default.Mic` 不可用，已用 `painterResource(R.drawable.ic_mic)` 替代；`ArrowBack` / `Menu` / `Add` 等可用
 - 前台服务和蓝牙操作需 `@SuppressLint("MissingPermission")` 并配合 try-catch SecurityException
 - 所有 Scaffold 内的页面必须接收并使用 `innerPadding`，否则底部内容被导航栏遮住
 
 ## 已知问题与修复记录
+
+### ChatScreen 功能栏与二级选择器（v0.214）
+
+**功能**：对话页面新增功能栏快捷入口，支持教学场景快捷操作
+
+**功能列表**：
+- 快速对话 — 无前缀，正常自由对话
+- 教学游戏 — 前缀 `教学游戏、{学科}、{年级}：`
+- 作文批改 — 前缀 `作文批改、{学科}、{年级}：`
+- 作业解析 — 前缀 `作业解析、{学科}、{年级}：`
+- AI命题 — 前缀 `AI命题、{学科}、{年级}、{试卷类型}：`
+- AI组题 — 前缀 `AI组题、{学科}、{年级}：`
+
+**二级选择器**：
+- 学科：语文 / 数学 / 英语
+- 年级：小学一年级~六年级、初一~初三、高一~高三
+- 试卷类型（仅AI命题）：期中 / 期末 / 月考 / 专项练习
+
+**交互逻辑**：
+1. 点击功能按钮切换当前功能（高亮蓝色显示）
+2. 非"快速对话"功能时，下方展开二级选择栏
+3. 学科/年级/试卷类型点击切换（带记忆功能）
+4. 输入框左侧显示蓝色前缀预览
+5. 发送时自动组合前缀+用户输入
 
 ### 蓝牙连接后崩溃（BadTokenException）
 
@@ -113,3 +138,11 @@ versionName = "0.211"
 **原因**：`Scaffold` 的 `innerPadding` 未传给页面组件
 
 **修复**：`MainActivity` → `NavGraph` → 所有 4 个页面都接收 `innerPadding`
+
+### 录音文件 .opus 类型识别（v0.214）
+
+**现象**：眼镜录音（`.opus` 格式）同步后在相册中不显示
+
+**原因**：`MediaSyncManager` 的 `addMediaFile()` 和 `detectMediaType()` 仅识别 `.wav`/`.mp3` 为 AUDIO，`.opus` 被兜底为 IMAGE
+
+**修复**：两处类型检测都添加了 `.opus` → `MediaType.AUDIO`；已持久化的错误分类需清除应用数据或重新同步

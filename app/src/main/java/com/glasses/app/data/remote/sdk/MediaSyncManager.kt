@@ -331,7 +331,8 @@ class MediaSyncManager private constructor(context: Context) {
                 entity.fileName.endsWith(".mp4", ignoreCase = true) ||
                 entity.fileName.endsWith(".mov", ignoreCase = true) -> MediaType.VIDEO
                 entity.fileName.endsWith(".wav", ignoreCase = true) ||
-                entity.fileName.endsWith(".mp3", ignoreCase = true) -> MediaType.AUDIO
+                entity.fileName.endsWith(".mp3", ignoreCase = true) ||
+                entity.fileName.endsWith(".opus", ignoreCase = true) -> MediaType.AUDIO
                 else -> MediaType.IMAGE
             }
 
@@ -434,7 +435,8 @@ class MediaSyncManager private constructor(context: Context) {
             fileName.endsWith(".mp4", ignoreCase = true) ||
             fileName.endsWith(".mov", ignoreCase = true) -> MediaType.VIDEO
             fileName.endsWith(".wav", ignoreCase = true) ||
-            fileName.endsWith(".mp3", ignoreCase = true) -> MediaType.AUDIO
+            fileName.endsWith(".mp3", ignoreCase = true) ||
+            fileName.endsWith(".opus", ignoreCase = true) -> MediaType.AUDIO
             else -> MediaType.IMAGE
         }
     }

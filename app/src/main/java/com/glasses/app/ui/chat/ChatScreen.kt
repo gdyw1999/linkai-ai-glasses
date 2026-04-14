@@ -11,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -60,6 +62,7 @@ import java.util.*
 @Composable
 fun ChatScreen(
     innerPadding: PaddingValues = PaddingValues(),
+    onBack: (() -> Unit)? = null,
     viewModel: ChatViewModel = viewModel(factory = ChatViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -130,7 +133,8 @@ fun ChatScreen(
             ChatTopBar(
                 conversationTitle = uiState.conversationTitle,
                 onNewChat = { viewModel.newConversation() },
-                onShowHistory = { viewModel.toggleConversationList() }
+                onShowHistory = { viewModel.toggleConversationList() },
+                onBack = onBack
             )
             
             // 消息列表
@@ -155,12 +159,33 @@ fun ChatScreen(
             if (uiState.statusMessage.isNotEmpty()) {
                 StatusBar(message = uiState.statusMessage)
             }
+
+            // 功能栏（快捷入口）
+            FeatureBar(
+                features = ChatViewModel.quickFeatures,
+                selectedFeature = uiState.selectedFeature,
+                onFeatureClick = { viewModel.selectFeature(it) }
+            )
+
+            // 二级选择栏（学科/年级/试卷类型）
+            if (uiState.selectedFeature != "快速对话") {
+                SecondarySelectorBar(
+                    selectedFeature = uiState.selectedFeature,
+                    selectedSubject = uiState.selectedSubject,
+                    selectedGrade = uiState.selectedGrade,
+                    selectedExamType = uiState.selectedExamType,
+                    onSubjectClick = { viewModel.selectSubject(it) },
+                    onGradeClick = { viewModel.selectGrade(it) },
+                    onExamTypeClick = { viewModel.selectExamType(it) }
+                )
+            }
             
             // 底部控制栏
             ChatControlBar(
                 isRecording = uiState.isRecording,
                 isProcessing = uiState.isProcessing,
                 isConnected = uiState.isConnected,
+                prefixText = viewModel.getFeaturePrefix(),
                 onStartRecording = { viewModel.startRecording() },
                 onStopRecording = { viewModel.stopRecording() },
                 onInterrupt = { viewModel.interrupt() },
@@ -263,7 +288,8 @@ fun ChatScreen(
 fun ChatTopBar(
     conversationTitle: String,
     onNewChat: () -> Unit,
-    onShowHistory: () -> Unit
+    onShowHistory: () -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     Surface(
         modifier = Modifier
@@ -279,16 +305,27 @@ fun ChatTopBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 左侧：历史记录按钮
-            IconButton(onClick = onShowHistory) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = "历史记录",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
+            // 左侧：返回按钮（全屏模式）或历史记录按钮
+            if (onBack != null) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "返回",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            } else {
+                IconButton(onClick = onShowHistory) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "历史记录",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
-            
+
             // 中间：标题
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -309,7 +346,7 @@ fun ChatTopBar(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            
+
             // 右侧：新建会话按钮
             IconButton(onClick = onNewChat) {
                 Icon(
@@ -318,6 +355,161 @@ fun ChatTopBar(
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
+            }
+        }
+    }
+}
+
+/**
+ * 功能栏 - 横向滑动的快捷入口
+ * 点击后设置当前功能模式
+ */
+@Composable
+private fun FeatureBar(
+    features: List<String>,
+    selectedFeature: String,
+    onFeatureClick: (String) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(features) { feature ->
+            val isSelected = feature == selectedFeature
+            Surface(
+                onClick = { onFeatureClick(feature) },
+                shape = RoundedCornerShape(16.dp),
+                color = if (isSelected) Color(0xFF2196F3) else Color(0xFFEEEEEE)
+            ) {
+                Text(
+                    text = feature,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    fontSize = 13.sp,
+                    color = if (isSelected) Color.White else Color(0xFF424242)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 二级选择栏 - 学科/年级/试卷类型选择
+ * 在功能栏下方显示，用于选择学科、年级等参数
+ */
+@Composable
+private fun SecondarySelectorBar(
+    selectedFeature: String,
+    selectedSubject: String,
+    selectedGrade: String,
+    selectedExamType: String,
+    onSubjectClick: (String) -> Unit,
+    onGradeClick: (String) -> Unit,
+    onExamTypeClick: (String) -> Unit
+) {
+    val isAIProposition = selectedFeature == "AI命题"
+
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // 第一行：学科选择
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "学科：",
+                fontSize = 12.sp,
+                color = Color(0xFF666666)
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ChatViewModel.subjects.forEach { subject ->
+                    val isSelected = subject == selectedSubject
+                    Surface(
+                        onClick = { onSubjectClick(subject) },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) Color(0xFF4CAF50) else Color(0xFFE8E8E8)
+                    ) {
+                        Text(
+                            text = subject,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            fontSize = 11.sp,
+                            color = if (isSelected) Color.White else Color(0xFF424242)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 第二行：年级选择
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "年级：",
+                fontSize = 12.sp,
+                color = Color(0xFF666666)
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(ChatViewModel.grades) { grade ->
+                    val isSelected = grade == selectedGrade
+                    Surface(
+                        onClick = { onGradeClick(grade) },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) Color(0xFFFF9800) else Color(0xFFE8E8E8)
+                    ) {
+                        Text(
+                            text = grade.replace("小学", "").replace("年级", ""),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                            fontSize = 10.sp,
+                            color = if (isSelected) Color.White else Color(0xFF424242)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 第三行：试卷类型选择（仅AI命题显示）
+        if (isAIProposition) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "类型：",
+                    fontSize = 12.sp,
+                    color = Color(0xFF666666)
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    ChatViewModel.examTypes.forEach { type ->
+                        val isSelected = type == selectedExamType
+                        Surface(
+                            onClick = { onExamTypeClick(type) },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) Color(0xFF9C27B0) else Color(0xFFE8E8E8)
+                        ) {
+                            Text(
+                                text = type,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                fontSize = 11.sp,
+                                color = if (isSelected) Color.White else Color(0xFF424242)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -434,13 +626,14 @@ fun StatusBar(message: String) {
 
 /**
  * 底部控制栏
- * 包含文本输入框、语音按钮、发送按钮
+ * 包含文本输入框、语音按钮、发送按钮，支持功能前缀显示
  */
 @Composable
 fun ChatControlBar(
     isRecording: Boolean,
     isProcessing: Boolean,
     isConnected: Boolean,
+    prefixText: String = "",  // 功能前缀文本，如"作文批改、语文、初一："
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
     onInterrupt: () -> Unit,
@@ -449,6 +642,8 @@ fun ChatControlBar(
 ) {
     // 文本输入状态，在重组之间保持
     var inputText by remember { mutableStateOf("") }
+    // 显示的前缀（带颜色区分）
+    val hasPrefix = prefixText.isNotBlank()
 
     Surface(
         modifier = Modifier
@@ -469,18 +664,24 @@ fun ChatControlBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // 文本输入框
-                    OutlinedTextField(
-                        value = inputText,
-                        onValueChange = { inputText = it },
+                    // 带前缀的文本输入框
+                    Box(
                         modifier = Modifier.weight(1f),
-                        placeholder = {
-                            Text(
-                                text = "输入消息...",
-                                color = Color(0xFFBDBDBD),
-                                fontSize = 14.sp
-                            )
-                        },
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        OutlinedTextField(
+                            value = inputText,
+                            onValueChange = { inputText = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                if (!hasPrefix) {
+                                    Text(
+                                        text = "输入消息...",
+                                        color = Color(0xFFBDBDBD),
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            },
                         maxLines = 4,
                         shape = RoundedCornerShape(20.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -491,6 +692,7 @@ fun ChatControlBar(
                         // 软键盘"发送"动作
                         textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
                     )
+                    } // 关闭 Box
 
                     // 语音按钮（输入框为空时显示）
                     if (inputText.isBlank()) {
@@ -515,8 +717,16 @@ fun ChatControlBar(
                         // 发送按钮（输入框有文字时显示）
                         IconButton(
                             onClick = {
-                                if (inputText.isNotBlank()) {
-                                    onSendText(inputText.trim())
+                                if (inputText.isNotBlank() || prefixText.isNotBlank()) {
+                                    // 组合前缀和用户输入发送
+                                    val fullText = if (prefixText.isNotBlank() && inputText.isNotBlank()) {
+                                        "$prefixText${inputText.trim()}"
+                                    } else if (prefixText.isNotBlank()) {
+                                        prefixText
+                                    } else {
+                                        inputText.trim()
+                                    }
+                                    onSendText(fullText)
                                     inputText = ""
                                 }
                             },

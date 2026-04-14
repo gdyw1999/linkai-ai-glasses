@@ -86,3 +86,12 @@ lint/tmp/
 
 # Android Profiling
 *.hprof
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Temp files
+.tmp/
+
+# IntelliJ (full)
+.idea/

@@ -6,6 +6,10 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -13,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.rememberNavController
 import com.glasses.app.ui.navigation.NavGraph
@@ -111,33 +116,43 @@ private fun AppContent(permissionHelper: PermissionHelper) {
 fun MainScreen() {
     val navController = rememberNavController()
     var currentRoute by remember { mutableStateOf(NavRoutes.HOME) }
-    
+
     // 监听导航变化
     LaunchedEffect(navController) {
         navController.currentBackStackEntryFlow.collect { backStackEntry ->
             currentRoute = backStackEntry.destination.route ?: NavRoutes.HOME
         }
     }
-    
+
+    // Chat 页面全屏：隐藏底部导航栏
+    val showBottomBar = currentRoute != NavRoutes.CHAT
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            BottomNavigationBar(
-                currentRoute = currentRoute,
-                onNavigate = { route ->
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.startDestinationId) {
-                            saveState = true
+            AnimatedVisibility(
+                visible = showBottomBar,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                BottomNavigationBar(
+                    currentRoute = currentRoute,
+                    onNavigate = { route ->
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
                     }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
-        // 导航内容（传入 Scaffold 的 padding 避免被底部导航栏遮住）
-        NavGraph(navController, innerPadding)
+        // Chat 页面传零 padding 实现全屏，其他页面正常传 innerPadding
+        val chatPadding = if (currentRoute == NavRoutes.CHAT) PaddingValues(0.dp) else innerPadding
+        NavGraph(navController, chatPadding)
     }
 }
 

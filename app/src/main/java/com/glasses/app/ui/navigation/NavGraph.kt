@@ -47,7 +47,10 @@ fun NavGraph(navController: NavHostController, innerPadding: PaddingValues = Pad
             )
         }
         composable(NavRoutes.CHAT) {
-            ChatScreen(innerPadding = innerPadding)
+            ChatScreen(
+                innerPadding = innerPadding,
+                onBack = { navController.popBackStack() }
+            )
         }
         composable(NavRoutes.GALLERY) {
             GalleryScreen(innerPadding = innerPadding)

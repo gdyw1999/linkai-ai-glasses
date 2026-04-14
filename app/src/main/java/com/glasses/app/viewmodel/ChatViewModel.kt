@@ -63,7 +63,12 @@ data class ChatUiState(
     val isListening: Boolean = false,
     val conversations: List<Conversation> = emptyList(),
     val showConversationList: Boolean = false,
-    val isConnected: Boolean = false
+    val isConnected: Boolean = false,
+    // 功能栏相关状态
+    val selectedFeature: String = "快速对话",  // 当前选中的功能
+    val selectedSubject: String = "语文",     // 当前选中的学科（默认语文）
+    val selectedGrade: String = "小学一年级", // 当前选中的年级（默认小学一年级）
+    val selectedExamType: String = "期中"      // 当前选中的试卷类型（仅AI命题使用）
 )
 
 /**
@@ -75,6 +80,30 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     
     companion object {
         private const val TAG = "ChatViewModel"
+
+        /** 功能栏快捷入口列表 */
+        val quickFeatures = listOf(
+            "快速对话",
+            "教学游戏",
+            "作文批改",
+            "作业解析",
+            "AI命题",
+            "AI组题"
+        )
+
+        /** 学科列表（固定3科） */
+        val subjects = listOf("语文", "数学", "英语")
+
+        /** 年级列表（小学到高中） */
+        val grades = listOf(
+            "小学一年级", "小学二年级", "小学三年级",
+            "小学四年级", "小学五年级", "小学六年级",
+            "初一", "初二", "初三",
+            "高一", "高二", "高三"
+        )
+
+        /** 试卷类型列表（仅AI命题使用） */
+        val examTypes = listOf("期中", "期末", "月考", "专项练习")
     }
     
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -557,17 +586,17 @@ class ChatViewModel(private val context: Context) : ViewModel() {
             try {
                 // 创建新会话
                 currentConversationId = conversationRepository.createConversation("新对话")
-                
+
                 _uiState.value = ChatUiState(
                     currentConversationId = currentConversationId,
                     conversationTitle = "新对话"
                 )
-                
+
                 // 重置流式对话管理器
                 if (::streamingChatManager.isInitialized) {
                     streamingChatManager.interrupt()
                 }
-                
+
                 Log.d(TAG, "New conversation created: $currentConversationId")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to create new conversation", e)
@@ -577,7 +606,62 @@ class ChatViewModel(private val context: Context) : ViewModel() {
             }
         }
     }
-    
+
+    /**
+     * 选择功能
+     * @param feature 功能名称
+     */
+    fun selectFeature(feature: String) {
+        _uiState.value = _uiState.value.copy(selectedFeature = feature)
+        com.glasses.app.util.AppLogger.i(TAG, "用户选择功能: $feature")
+    }
+
+    /**
+     * 选择学科
+     * @param subject 学科名称
+     */
+    fun selectSubject(subject: String) {
+        _uiState.value = _uiState.value.copy(selectedSubject = subject)
+        com.glasses.app.util.AppLogger.i(TAG, "用户选择学科: $subject")
+    }
+
+    /**
+     * 选择年级
+     * @param grade 年级名称
+     */
+    fun selectGrade(grade: String) {
+        _uiState.value = _uiState.value.copy(selectedGrade = grade)
+        com.glasses.app.util.AppLogger.i(TAG, "用户选择年级: $grade")
+    }
+
+    /**
+     * 选择试卷类型（仅AI命题使用）
+     * @param examType 试卷类型
+     */
+    fun selectExamType(examType: String) {
+        _uiState.value = _uiState.value.copy(selectedExamType = examType)
+        com.glasses.app.util.AppLogger.i(TAG, "用户选择试卷类型: $examType")
+    }
+
+    /**
+     * 获取当前功能的前缀文本
+     * 根据当前选中的功能、学科、年级生成前缀
+     */
+    fun getFeaturePrefix(): String {
+        val state = _uiState.value
+        val feature = state.selectedFeature
+
+        return when (feature) {
+            "快速对话" -> ""
+            "教学游戏" -> "教学游戏、${state.selectedSubject}、${state.selectedGrade}："
+            "作文批改" -> "作文批改、${state.selectedSubject}、${state.selectedGrade}："
+            "作业解析" -> "作业解析、${state.selectedSubject}、${state.selectedGrade}："
+            "AI命题" -> "AI命题、${state.selectedSubject}、${state.selectedGrade}、${state.selectedExamType}："
+            "AI组题" -> "AI组题、${state.selectedSubject}、${state.selectedGrade}："
+            else -> ""
+        }
+    }
+
     /**
      * 加载会话消息
      */
