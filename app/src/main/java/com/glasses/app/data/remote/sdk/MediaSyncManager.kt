@@ -181,6 +181,8 @@ class MediaSyncManager private constructor(context: Context) {
 
                     override fun recordingToPcm(fileName: String, filePath: String, duration: Int) {
                         Log.d(TAG, "录音转PCM: $fileName -> $filePath, 时长: ${duration}ms")
+                        // 将 PCM 转换成 WAV 格式保存
+                        convertPcmToWavAndAdd(fileName, filePath, duration)
                     }
 
                     override fun recordingToPcmError(fileName: String, errorInfo: String) {
@@ -556,6 +558,63 @@ class MediaSyncManager private constructor(context: Context) {
             Log.d(TAG, "从 SharedPreferences 恢复媒体文件: ${mediaFileMap.size} 个")
         } catch (e: Exception) {
             Log.e(TAG, "恢复媒体文件失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 将 PCM 录音文件转换为 WAV 格式并添加到媒体列表
+     * @param fileName 原始 PCM 文件名
+     * @param pcmFilePath PCM 文件路径
+     * @param duration 音频时长（毫秒）
+     */
+    private fun convertPcmToWavAndAdd(fileName: String, pcmFilePath: String, duration: Int) {
+        managerScope.launch {
+            try {
+                val pcmFile = File(pcmFilePath)
+                if (!pcmFile.exists()) {
+                    Log.e(TAG, "PCM 文件不存在: $pcmFilePath")
+                    return@launch
+                }
+
+                // 生成 WAV 文件名（替换扩展名）
+                val wavFileName = fileName.substringBeforeLast(".") + ".wav"
+                val wavFile = File(pcmFile.parent, wavFileName)
+
+                // 调用 AudioConverter 转换
+                val result = com.glasses.app.util.AudioConverter.convertPcmToWav(
+                    pcmFile = pcmFile,
+                    wavFile = wavFile,
+                    sampleRate = 16000,  // 眼镜录音采样率
+                    channels = 1,         // 单声道
+                    bitDepth = 16         // 16位
+                )
+
+                if (result.isSuccess) {
+                    // 删除原始 PCM 文件
+                    pcmFile.delete()
+
+                    // 添加 WAV 文件到媒体列表
+                    val mediaFile = MediaFile(
+                        id = wavFileName,
+                        fileName = wavFileName,
+                        filePath = wavFile.absolutePath,
+                        type = MediaType.AUDIO,
+                        size = wavFile.length(),
+                        duration = duration.toLong(),
+                        createTime = System.currentTimeMillis()
+                    )
+
+                    mediaFileMap[wavFileName] = mediaFile
+                    updateMediaFilesList()
+                    persistMediaFiles()
+
+                    Log.d(TAG, "PCM 转 WAV 成功: $wavFileName (${wavFile.length()} bytes)")
+                } else {
+                    Log.e(TAG, "PCM 转 WAV 失败: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "转换 PCM 到 WAV 异常", e)
+            }
         }
     }
 }

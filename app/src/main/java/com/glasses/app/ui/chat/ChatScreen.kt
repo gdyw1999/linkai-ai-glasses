@@ -50,6 +50,7 @@ import com.glasses.app.R
 import com.glasses.app.viewmodel.ChatViewModelFactory
 import com.glasses.app.viewmodel.Conversation
 import com.glasses.app.viewmodel.Message
+import com.glasses.app.viewmodel.SharedRenderViewModel
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -64,8 +65,13 @@ fun ChatScreen(
     innerPadding: PaddingValues = PaddingValues(),
     onBack: (() -> Unit)? = null,
     conversationId: Long = 0L,
-    viewModel: ChatViewModel = viewModel(factory = ChatViewModelFactory(LocalContext.current, conversationId))
+    onNavigateToRender: (() -> Unit)? = null,        // 跳转到渲染页面的回调
+    sharedViewModel: SharedRenderViewModel? = null  // 共享渲染数据的 ViewModel
 ) {
+    // 创建 ViewModel，传入 sharedViewModel
+    val viewModel: ChatViewModel = viewModel(
+        factory = ChatViewModelFactory(LocalContext.current, conversationId, sharedViewModel)
+    )
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
 
@@ -747,22 +753,24 @@ fun ChatControlBar(
                         }
                     }
 
-                    // 右侧 + 按钮（展开附件面板）
-                    IconButton(
-                        onClick = onAddClick,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(
-                                Color(0xFF4CAF50),
-                                RoundedCornerShape(22.dp)
+                    // 右侧 + 按钮（仅在输入框为空时显示，防止误点）
+                    if (inputText.isBlank() && prefixText.isBlank()) {
+                        IconButton(
+                            onClick = onAddClick,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(
+                                    Color(0xFF4CAF50),
+                                    RoundedCornerShape(22.dp)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "添加附件",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
                             )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "添加附件",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        }
                     }
                 }
             } else if (isRecording) {

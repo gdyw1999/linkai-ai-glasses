@@ -12,8 +12,8 @@ android {
         applicationId = "com.glasses.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 215
-        versionName = "0.215"
+        versionCode = 216
+        versionName = "0.216"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -112,6 +112,11 @@ dependencies {
     // 媒体播放器
     implementation("androidx.media3:media3-exoplayer:1.1.1")
     implementation("androidx.media3:media3-ui:1.1.1")
+
+    // Markdown 渲染
+    implementation("io.noties.markwon:core:4.6.2")
+    implementation("io.noties.markwon:html:4.6.2")
+    implementation("io.noties.markwon:syntax-highlight:4.6.2")
     
     // 测试库
     testImplementation("junit:junit:4.13.2")

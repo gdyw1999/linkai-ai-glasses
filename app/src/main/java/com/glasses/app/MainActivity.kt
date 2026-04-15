@@ -11,15 +11,19 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
 import com.glasses.app.ui.navigation.NavGraph
 import com.glasses.app.ui.navigation.NavRoutes
 import com.glasses.app.ui.permission.PermissionDeniedDialog
@@ -173,9 +177,9 @@ fun BottomNavigationBar(
         NavigationBarItem(
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Email,
+                    painter = painterResource(R.drawable.chat_24),
                     contentDescription = "对话",
-                    modifier = Modifier
+                    modifier = Modifier.size(24.dp)
                 )
             },
             label = {
@@ -199,9 +203,9 @@ fun BottomNavigationBar(
         NavigationBarItem(
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Home,
+                    painter = painterResource(R.drawable.eyeglasses_2_24),
                     contentDescription = "AR眼镜",
-                    modifier = Modifier
+                    modifier = Modifier.size(24.dp)
                 )
             },
             label = {

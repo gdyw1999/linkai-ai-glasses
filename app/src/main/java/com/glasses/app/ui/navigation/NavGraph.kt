@@ -2,6 +2,7 @@ package com.glasses.app.ui.navigation
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -9,10 +10,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.glasses.app.ui.chat.ChatScreen
 import com.glasses.app.ui.conversation.ConversationListScreen
+import com.glasses.app.ui.content.ContentRenderScreen
 import com.glasses.app.ui.gallery.GalleryScreen
 import com.glasses.app.ui.home.DeviceScanScreen
 import com.glasses.app.ui.home.HomeScreen
 import com.glasses.app.ui.profile.ProfileScreen
+import com.glasses.app.viewmodel.SharedRenderViewModel
 
 /**
  * 导航路由定义
@@ -24,6 +27,7 @@ object NavRoutes {
     const val GALLERY = "gallery"
     const val PROFILE = "profile"
     const val DEVICE_SCAN = "device_scan"
+    const val CONTENT_RENDER = "content_render"  // 内容渲染页面
 
     /** 构建 Chat 路由，传入会话 ID */
     fun chatRoute(conversationId: Long): String = "chat/$conversationId"
@@ -76,10 +80,28 @@ fun NavGraph(navController: NavHostController, innerPadding: PaddingValues = Pad
             )
         ) { backStackEntry ->
             val conversationId = backStackEntry.arguments?.getLong("conversationId") ?: 0L
+            // 获取共享 ViewModel（在多个页面间共享）
+            val sharedViewModel: SharedRenderViewModel = viewModel()
+
             ChatScreen(
                 innerPadding = PaddingValues(),
                 onBack = { navController.popBackStack() },
-                conversationId = conversationId
+                conversationId = conversationId,
+                onNavigateToRender = {
+                    // 跳转到内容渲染页面
+                    navController.navigate(NavRoutes.CONTENT_RENDER)
+                },
+                sharedViewModel = sharedViewModel
+            )
+        }
+
+        // 内容渲染页面（HTML/Markdown）
+        composable(NavRoutes.CONTENT_RENDER) {
+            val sharedViewModel: SharedRenderViewModel = viewModel()
+
+            ContentRenderScreen(
+                sharedViewModel = sharedViewModel,
+                onBack = { navController.popBackStack() }
             )
         }
 

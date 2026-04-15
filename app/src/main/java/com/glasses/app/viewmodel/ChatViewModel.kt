@@ -78,7 +78,8 @@ data class ChatUiState(
  */
 class ChatViewModel(
     private val context: Context,
-    private val initialConversationId: Long = 0L
+    private val initialConversationId: Long = 0L,
+    private val sharedRenderViewModel: SharedRenderViewModel? = null  // 共享渲染数据的 ViewModel
 ) : ViewModel() {
     
     companion object {
@@ -397,10 +398,38 @@ class ChatViewModel(
                 )
 
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to send text message", e)
+                // 详细的错误分类和日志
+                val (errorMsg, detailLog) = when {
+                    e is java.net.SocketTimeoutException -> {
+                        val isConnect = e.message?.contains("failed to connect", true) == true
+                        if (isConnect) {
+                            "连接服务器超时" to "连接LinkAI API超时 - 可能原因: 网络不稳定、API服务器负载高、DNS解析慢"
+                        } else {
+                            "读取响应超时" to "读取LinkAI响应超时 - 可能原因: LLM生成时间过长、网络传输慢"
+                        }
+                    }
+                    e is java.net.UnknownHostException -> {
+                        "无法连接到服务器" to "DNS解析失败或无法访问 - 请检查网络连接、API地址是否正确"
+                    }
+                    e is java.io.IOException -> {
+                        "网络错误" to "IO异常: ${e.message} - 可能原因: 网络中断、连接被重置"
+                    }
+                    e.message?.contains("timeout", true) == true -> {
+                        "请求超时" to "请求超时: ${e.message}"
+                    }
+                    else -> {
+                        "发送失败" to "未知异常: ${e.javaClass.simpleName} - ${e.message}"
+                    }
+                }
+
+                // 详细日志
+                Log.e(TAG, "发送文本消息失败 - $detailLog", e)
+                Log.e(TAG, "异常类型: ${e.javaClass.simpleName}, 消息: ${e.message}")
+                Log.e(TAG, "会话ID: $currentConversationId, 消息长度: ${text.trim().length}")
+
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
-                    statusMessage = "发送失败: ${e.message}"
+                    statusMessage = errorMsg
                 )
             }
         }
@@ -1041,6 +1070,37 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * 渲染 HTML/Markdown 内容
+     * 设置内容到共享 ViewModel，然后由调用方触发导航跳转
+     *
+     * @param content HTML 或 Markdown 内容
+     * @param type 内容类型（HTML 或 MARKDOWN）
+     */
+    fun renderContent(content: String, type: ContentType = ContentType.MARKDOWN) {
+        sharedRenderViewModel?.setRenderContent(content, type)
+        Log.d(TAG, "Content set for rendering: type=$type, length=${content.length}")
+    }
+
+    /**
+     * 检测内容类型并自动渲染
+     * 检测规则：
+     * - 包含 <!DOCTYPE html 或 <html 标签 → HTML
+     * - 其他 → Markdown
+     *
+     * @param content 要渲染的内容
+     */
+    fun detectAndRenderContent(content: String): Boolean {
+        val type = when {
+            content.contains("<!DOCTYPE html", ignoreCase = true) ||
+            content.contains("<html", ignoreCase = true) -> ContentType.HTML
+            else -> ContentType.MARKDOWN
+        }
+
+        renderContent(content, type)
+        return true
+    }
+
     override fun onCleared() {
         super.onCleared()
         // 释放资源
@@ -1056,12 +1116,13 @@ class ChatViewModel(
  */
 class ChatViewModelFactory(
     private val context: Context,
-    private val conversationId: Long = 0L
+    private val conversationId: Long = 0L,
+    private val sharedRenderViewModel: SharedRenderViewModel? = null
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ChatViewModel(context, conversationId) as T
+            return ChatViewModel(context, conversationId, sharedRenderViewModel) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

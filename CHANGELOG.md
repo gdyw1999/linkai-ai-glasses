@@ -2,6 +2,59 @@
 
 All notable changes to the Linkai星韵AI眼镜Android App project will be documented in this file.
 
+## [0.216] - 2026-04-16
+
+### Added - HTML/Markdown 内容渲染页面
+
+- **新增独立渲染页面（ContentRenderScreen）**
+  - 支持 Markdown 渲染（标题、列表、代码块、表格、图片）
+  - 支持 HTML 渲染（完整网页、JS 交互、Canvas 游戏）
+  - 代码语法高亮（SyntaxHighlightPlugin）
+  - 响应式布局、缩放控制
+  - 通过 SharedRenderViewModel 跨页面传递数据
+
+- **新增路由和导航**
+  - NavRoutes 添加 `CONTENT_RENDER` 路由
+  - NavGraph 集成渲染页面路由
+  - ChatViewModel 添加 `renderContent()` 和 `detectAndRenderContent()` 方法
+
+- **使用场景**
+  - AI 返回 HTML 游戏时自动渲染
+  - 消息长按菜单"渲染查看"选项
+  - 支持交互式内容（按钮、表单、动画）
+
+### Changed - 聊天输入栏优化
+
+- **输入栏按钮逻辑改进**
+  - 输入框有文字时，自动隐藏"+"附件按钮
+  - 只显示发送按钮，防止误点"+"号
+  - 空状态时显示"+"和语音按钮
+
+### Changed - 网络超时配置
+
+- **读取超时增加至 180 秒**
+  - 从 60 秒增加到 180 秒（3分钟）
+  - 适配慢速 LLM 响应（实测 132 秒）
+  - LinkAIClient.READ_TIMEOUT = 180L
+
+### Changed - 录音格式转换
+
+- **录音自动转换为 WAV 格式**
+  - SDK 的 `recordingToPcm` 回调中自动转换
+  - 使用 AudioConverter 将 PCM 转 WAV
+  - 删除原始 PCM 文件，保存 WAV 文件
+  - 采样率 16000Hz、单声道、16bit
+
+### Changed - 品牌更名与自定义图标
+
+- **App 名称更新**
+  - 中文名称：Linkai智教未来
+  - 英文名称：Linkai Future
+
+- **自定义导航栏图标**
+  - 对话 Tab：chat_24.xml（聊天气泡图标）
+  - AR眼镜 Tab：eyeglasses_2_24.xml（眼镜图标）
+
 ## [0.215] - 2026-04-15
 
 ### Changed - 导航重组：对话列表作为首页
