@@ -55,4 +55,17 @@ interface ConversationDao {
      */
     @Query("DELETE FROM conversations")
     suspend fun deleteAllConversations()
+
+    /**
+     * 搜索会话（标题或消息内容包含关键词，按更新时间倒序）
+     * 使用 DISTINCT 去重，因为一条消息匹配就会导致会话出现多次
+     */
+    @Query("""
+        SELECT DISTINCT c.* FROM conversations c
+        LEFT JOIN messages m ON c.id = m.conversationId
+        WHERE c.title LIKE '%' || :query || '%'
+           OR m.content LIKE '%' || :query || '%'
+        ORDER BY c.updatedAt DESC
+    """)
+    fun searchConversations(query: String): Flow<List<ConversationEntity>>
 }

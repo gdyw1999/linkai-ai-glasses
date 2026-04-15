@@ -64,6 +64,13 @@ class ConversationRepository(context: Context) {
     }
     
     /**
+     * 搜索会话（标题或消息内容包含关键词）
+     */
+    fun searchConversations(query: String): Flow<List<ConversationEntity>> {
+        return conversationDao.searchConversations(query)
+    }
+
+    /**
      * 删除会话
      */
     suspend fun deleteConversation(id: Long) {

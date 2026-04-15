@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "mcp__web-reader__webReader"
+      "mcp__web-reader__webReader",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(./gradlew compileDebugKotlin)"
     ]
   }
 }

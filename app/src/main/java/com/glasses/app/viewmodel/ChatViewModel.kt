@@ -76,7 +76,10 @@ data class ChatUiState(
  * 管理对话流程、消息列表、会话切换等
  * 集成真实的后端模块：RecordingManager、AIServiceImpl、StreamingChatManager、ConversationRepository
  */
-class ChatViewModel(private val context: Context) : ViewModel() {
+class ChatViewModel(
+    private val context: Context,
+    private val initialConversationId: Long = 0L
+) : ViewModel() {
     
     companion object {
         private const val TAG = "ChatViewModel"
@@ -169,13 +172,17 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                     )
                 }
 
-                // 创建新会话
-                currentConversationId = conversationRepository.createConversation("新对话")
-                
-                _uiState.value = _uiState.value.copy(
-                    currentConversationId = currentConversationId,
-                    conversationTitle = "新对话"
-                )
+                if (initialConversationId > 0) {
+                    // 从对话列表进入：加载已有会话
+                    loadExistingConversation(initialConversationId)
+                } else {
+                    // 创建新会话
+                    currentConversationId = conversationRepository.createConversation("新对话")
+                    _uiState.value = _uiState.value.copy(
+                        currentConversationId = currentConversationId,
+                        conversationTitle = "新对话"
+                    )
+                }
                 
                 // 初始化流式对话管理器
                 streamingChatManager = StreamingChatManager(context, aiService)
@@ -207,7 +214,42 @@ class ChatViewModel(private val context: Context) : ViewModel() {
             }
         }
     }
-    
+
+    /**
+     * 加载已有会话：设置当前会话 ID、标题，并加载历史消息到消息列表
+     */
+    private suspend fun loadExistingConversation(conversationId: Long) {
+        val conversation = conversationRepository.getConversation(conversationId)
+        if (conversation != null) {
+            currentConversationId = conversationId
+            _uiState.value = _uiState.value.copy(
+                currentConversationId = conversationId,
+                conversationTitle = conversation.title.ifBlank { "新对话" }
+            )
+            // 加载该会话的所有历史消息到 UI
+            val messages = conversationRepository.getMessagesOnce(conversationId)
+            val uiMessages = messages.map { entity ->
+                Message(
+                    id = entity.id.toString(),
+                    content = entity.content,
+                    isUser = entity.role == "user",
+                    timestamp = entity.createdAt,
+                    audioUrl = entity.audioUrl
+                )
+            }
+            _uiState.value = _uiState.value.copy(messages = uiMessages)
+            Log.d(TAG, "Loaded conversation $conversationId with ${uiMessages.size} messages")
+        } else {
+            // 会话不存在，创建新的
+            currentConversationId = conversationRepository.createConversation("新对话")
+            _uiState.value = _uiState.value.copy(
+                currentConversationId = currentConversationId,
+                conversationTitle = "新对话"
+            )
+            Log.w(TAG, "Conversation $conversationId not found, created new one")
+        }
+    }
+
     /**
      * 处理录音状态变化
      */
@@ -1012,11 +1054,14 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 /**
  * ChatViewModel工厂类
  */
-class ChatViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+class ChatViewModelFactory(
+    private val context: Context,
+    private val conversationId: Long = 0L
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ChatViewModel(context) as T
+            return ChatViewModel(context, conversationId) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

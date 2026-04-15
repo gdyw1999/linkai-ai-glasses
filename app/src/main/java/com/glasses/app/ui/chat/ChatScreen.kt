@@ -63,7 +63,8 @@ import java.util.*
 fun ChatScreen(
     innerPadding: PaddingValues = PaddingValues(),
     onBack: (() -> Unit)? = null,
-    viewModel: ChatViewModel = viewModel(factory = ChatViewModelFactory(LocalContext.current))
+    conversationId: Long = 0L,
+    viewModel: ChatViewModel = viewModel(factory = ChatViewModelFactory(LocalContext.current, conversationId))
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()

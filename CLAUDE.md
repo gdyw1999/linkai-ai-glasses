@@ -34,8 +34,8 @@ app/build/outputs/apk/debug/app-debug.apk
 版本号在 `app/build.gradle.kts` 中维护，格式为 `0.xxx`，每次改动 +1：
 
 ```kotlin
-versionCode = 214   // 与 versionName 同步递增
-versionName = "0.214"
+versionCode = 215   // 与 versionName 同步递增
+versionName = "0.215"
 ```
 
 ## 架构要点
@@ -44,8 +44,10 @@ versionName = "0.214"
 
 - `MainActivity.kt` — Scaffold + 底部导航栏（Chat 页面全屏隐藏导航栏，其他页面正常显示）
 - `NavGraph.kt` — 路由定义，所有页面接收 `innerPadding: PaddingValues`；Chat 页面传 `PaddingValues(0)` 实现全屏
-- 4 个 Tab 页：Home / Chat / Gallery / Profile
-- Chat 页面：顶部返回按钮（`onBack`）导航回首页，导航栏随之恢复
+- 4 个 Tab 页：ConversationList（对话） / Home（AR眼镜） / Gallery（AR相册） / Profile（我的）
+- AI对话页面不在 Tab 栏中，仅通过对话列表的新建/选择会话进入
+- Chat 路由格式 `"chat/{conversationId}"`，从对话列表跳转时传入会话 ID
+- 对话列表页（首页）：显示所有历史会话，支持搜索（标题+消息内容）、新建、长按重命名/删除
 
 ### AI 服务链路
 

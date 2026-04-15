@@ -115,17 +115,17 @@ private fun AppContent(permissionHelper: PermissionHelper) {
 @Composable
 fun MainScreen() {
     val navController = rememberNavController()
-    var currentRoute by remember { mutableStateOf(NavRoutes.HOME) }
+    var currentRoute by remember { mutableStateOf(NavRoutes.CONVERSATION_LIST) }
 
     // 监听导航变化
     LaunchedEffect(navController) {
         navController.currentBackStackEntryFlow.collect { backStackEntry ->
-            currentRoute = backStackEntry.destination.route ?: NavRoutes.HOME
+            currentRoute = backStackEntry.destination.route ?: NavRoutes.CONVERSATION_LIST
         }
     }
 
-    // Chat 页面全屏：隐藏底部导航栏
-    val showBottomBar = currentRoute != NavRoutes.CHAT
+    // Chat 页面全屏：隐藏底部导航栏（Chat 路由格式为 "chat/{conversationId}"）
+    val showBottomBar = !currentRoute.startsWith("chat")
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -151,7 +151,7 @@ fun MainScreen() {
         }
     ) { innerPadding ->
         // Chat 页面传零 padding 实现全屏，其他页面正常传 innerPadding
-        val chatPadding = if (currentRoute == NavRoutes.CHAT) PaddingValues(0.dp) else innerPadding
+        val chatPadding = if (currentRoute.startsWith("chat")) PaddingValues(0.dp) else innerPadding
         NavGraph(navController, chatPadding)
     }
 }
@@ -169,17 +169,44 @@ fun BottomNavigationBar(
         containerColor = Color.White,
         contentColor = Color(0xFF2196F3)
     ) {
+        // 对话（首页）
         NavigationBarItem(
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Home,
-                    contentDescription = "首页",
+                    imageVector = Icons.Default.Email,
+                    contentDescription = "对话",
                     modifier = Modifier
                 )
             },
             label = {
                 Text(
-                    text = "首页",
+                    text = "对话",
+                    fontSize = 11.sp
+                )
+            },
+            selected = currentRoute == NavRoutes.CONVERSATION_LIST,
+            onClick = { onNavigate(NavRoutes.CONVERSATION_LIST) },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color(0xFF2196F3),
+                selectedTextColor = Color(0xFF2196F3),
+                unselectedIconColor = Color(0xFFCCCCCC),
+                unselectedTextColor = Color(0xFFCCCCCC),
+                indicatorColor = Color(0xFFE3F2FD)
+            )
+        )
+
+        // AR眼镜（原首页）
+        NavigationBarItem(
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Home,
+                    contentDescription = "AR眼镜",
+                    modifier = Modifier
+                )
+            },
+            label = {
+                Text(
+                    text = "AR眼镜",
                     fontSize = 11.sp
                 )
             },
@@ -193,43 +220,19 @@ fun BottomNavigationBar(
                 indicatorColor = Color(0xFFE3F2FD)
             )
         )
-        
-        NavigationBarItem(
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "AI对话",
-                    modifier = Modifier
-                )
-            },
-            label = {
-                Text(
-                    text = "AI对话",
-                    fontSize = 11.sp
-                )
-            },
-            selected = currentRoute == NavRoutes.CHAT,
-            onClick = { onNavigate(NavRoutes.CHAT) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color(0xFF2196F3),
-                selectedTextColor = Color(0xFF2196F3),
-                unselectedIconColor = Color(0xFFCCCCCC),
-                unselectedTextColor = Color(0xFFCCCCCC),
-                indicatorColor = Color(0xFFE3F2FD)
-            )
-        )
-        
+
+        // AR相册
         NavigationBarItem(
             icon = {
                 Icon(
                     imageVector = Icons.Default.Star,
-                    contentDescription = "相册",
+                    contentDescription = "AR相册",
                     modifier = Modifier
                 )
             },
             label = {
                 Text(
-                    text = "相册",
+                    text = "AR相册",
                     fontSize = 11.sp
                 )
             },
@@ -243,7 +246,8 @@ fun BottomNavigationBar(
                 indicatorColor = Color(0xFFE3F2FD)
             )
         )
-        
+
+        // 我的
         NavigationBarItem(
             icon = {
                 Icon(

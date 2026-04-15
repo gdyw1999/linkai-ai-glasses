@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Linkai星韵</string>
+    <string name="app_name">Linkai Future</string>
     
     <!-- 权限相关 -->
     <string name="permission_bluetooth_rationale">需要蓝牙权限以连接眼镜设备</string>
@@ -23,9 +23,9 @@
     <string name="settings">设置</string>
     
     <!-- 前台服务 -->
-    <string name="foreground_service_title">Linkai星韵</string>
+    <string name="foreground_service_title">Linkai Future</string>
     <string name="foreground_service_content">已连接，语音唤醒已启用</string>
     
     <!-- 公司信息 -->
-    <string name="company_name">LinkAi</string>
+    <string name="company_name">Linkai Future</string>
 </resources>

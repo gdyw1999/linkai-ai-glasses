@@ -2,6 +2,35 @@
 
 All notable changes to the Linkai星韵AI眼镜Android App project will be documented in this file.
 
+## [0.215] - 2026-04-15
+
+### Changed - 导航重组：对话列表作为首页
+
+- **底部导航栏重组**
+  - Tab 顺序改为：对话 | AR眼镜 | AR相册 | 我的
+  - 原首页改名为"AR眼镜"
+  - 原相册改名为"AR相册"
+  - AI对话从底部 Tab 移除，仅通过对话列表内的新建/选择进入
+
+- **新增对话列表页（首页）**
+  - 显示所有历史会话，按更新时间倒序排列
+  - 顶栏右侧：搜索按钮 + 新建对话按钮
+  - 搜索支持标题和消息内容关键词匹配
+  - 会话卡片显示：标题、消息数量、更新时间
+  - 长按会话卡片弹出菜单：重命名 / 删除
+  - 空状态提示："暂无对话，点击新建开始"
+
+- **AI对话页面调整**
+  - ChatScreen 新增 `conversationId` 参数，支持加载指定会话的历史消息
+  - ChatViewModel 新增 `loadExistingConversation()` 方法
+  - 路由从 `"chat"` 改为 `"chat/{conversationId}"`，从对话列表跳转时传入会话 ID
+  - 保持全屏模式（隐藏底部导航栏）
+
+- **数据层扩展**
+  - ConversationDao 新增 `searchConversations()` 方法（JOIN messages 表搜索标题+内容）
+  - ConversationRepository 新增 `searchConversations()` 封装
+  - 新增 ConversationListViewModel 和 ConversationListScreen
+
 ## [0.214] - 2026-04-12
 
 ### Added - ChatScreen 功能栏与教学场景快捷输入
