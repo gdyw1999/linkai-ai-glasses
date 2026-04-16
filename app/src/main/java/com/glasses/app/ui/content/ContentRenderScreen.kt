@@ -7,11 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,7 +25,6 @@ import com.glasses.app.viewmodel.RenderContent
 import com.glasses.app.viewmodel.SharedRenderViewModel
 import io.noties.markwon.Markwon
 import io.noties.markwon.html.HtmlPlugin
-import io.noties.markwon.syntax.highlight.SyntaxHighlightPlugin
 
 /**
  * 内容渲染页面
@@ -48,7 +48,6 @@ fun ContentRenderScreen(
     val markwon = remember {
         Markwon.builder(context)
             .usePlugin(HtmlPlugin.create())           // 支持 HTML 标签
-            .usePlugin(SyntaxHighlightPlugin.create()) // 支持代码高亮
             .build()
     }
 
@@ -74,7 +73,7 @@ fun ContentRenderScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = Icons.Default.ArrowBack,
                             contentDescription = "返回"
                         )
                     }
@@ -209,5 +208,3 @@ private fun generateHtmlContent(
         renderContent.content
     }
 }
-
-import androidx.compose.runtime.remember
