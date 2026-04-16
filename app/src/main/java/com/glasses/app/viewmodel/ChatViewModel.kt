@@ -29,9 +29,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 /**
- * 消息数据类
+ * 聊天消息数据类（UI层）
  */
-data class Message(
+data class ChatMessage(
     val id: String = "",
     val content: String = "",
     val isUser: Boolean = true,
@@ -53,7 +53,7 @@ data class Conversation(
  * AI对话UI状态
  */
 data class ChatUiState(
-    val messages: List<Message> = emptyList(),
+    val messages: List<ChatMessage> = emptyList(),
     val isRecording: Boolean = false,
     val recordingDuration: Long = 0L,
     val isProcessing: Boolean = false,
@@ -230,7 +230,7 @@ class ChatViewModel(
             // 加载该会话的所有历史消息到 UI
             val messages = conversationRepository.getMessagesOnce(conversationId)
             val uiMessages = messages.map { entity ->
-                Message(
+                ChatMessage(
                     id = entity.id.toString(),
                     content = entity.content,
                     isUser = entity.role == "user",
@@ -518,7 +518,7 @@ class ChatViewModel(
      * 添加用户消息
      */
     private fun addUserMessage(content: String) {
-        val message = Message(
+        val message = ChatMessage(
             id = System.currentTimeMillis().toString(),
             content = content,
             isUser = true,
@@ -534,7 +534,7 @@ class ChatViewModel(
      * 添加AI消息（非流式）
      */
     private fun addAssistantMessage(content: String) {
-        val message = Message(
+        val message = ChatMessage(
             id = System.currentTimeMillis().toString(),
             content = content,
             isUser = false,
@@ -559,7 +559,7 @@ class ChatViewModel(
             val updatedMessage = currentMessages[lastIndex].copy(content = content)
             currentMessages[lastIndex] = updatedMessage
         } else {
-            val message = Message(
+            val message = ChatMessage(
                 id = System.currentTimeMillis().toString(),
                 content = content,
                 isUser = false,
@@ -753,7 +753,7 @@ class ChatViewModel(
                 // 获取消息列表
                 val messages = conversationRepository.getMessagesOnce(conversationId)
                 val uiMessages = messages.map { entity ->
-                    Message(
+                    ChatMessage(
                         id = entity.id.toString(),
                         content = entity.content,
                         isUser = entity.role == "user",
@@ -905,7 +905,7 @@ class ChatViewModel(
                 )
                 _uiState.value = _uiState.value.copy(
                     messages = conversationRepository.getMessagesOnce(currentConversationId).map { entity ->
-                        Message(
+                        ChatMessage(
                             id = entity.id.toString(),
                             content = entity.content,
                             isUser = entity.role == "user",
@@ -934,7 +934,7 @@ class ChatViewModel(
                         )
                         _uiState.value = _uiState.value.copy(
                             messages = conversationRepository.getMessagesOnce(currentConversationId).map { entity ->
-                                Message(
+                                ChatMessage(
                                     id = entity.id.toString(),
                                     content = entity.content,
                                     isUser = entity.role == "user",
@@ -954,7 +954,7 @@ class ChatViewModel(
                         )
                         _uiState.value = _uiState.value.copy(
                             messages = conversationRepository.getMessagesOnce(currentConversationId).map { entity ->
-                                Message(
+                                ChatMessage(
                                     id = entity.id.toString(),
                                     content = entity.content,
                                     isUser = entity.role == "user",

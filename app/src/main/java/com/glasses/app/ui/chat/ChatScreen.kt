@@ -49,7 +49,7 @@ import com.glasses.app.viewmodel.ChatViewModel
 import com.glasses.app.R
 import com.glasses.app.viewmodel.ChatViewModelFactory
 import com.glasses.app.viewmodel.Conversation
-import com.glasses.app.viewmodel.Message
+import com.glasses.app.viewmodel.ChatMessage
 import com.glasses.app.viewmodel.SharedRenderViewModel
 import java.io.File
 import java.text.SimpleDateFormat
