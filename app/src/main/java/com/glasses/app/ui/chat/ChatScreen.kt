@@ -61,12 +61,13 @@ import java.util.*
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("UNUSED_PARAMETER")
 fun ChatScreen(
     innerPadding: PaddingValues = PaddingValues(),
     onBack: (() -> Unit)? = null,
     conversationId: Long = 0L,
-    onNavigateToRender: (() -> Unit)? = null,        // 跳转到渲染页面的回调
-    sharedViewModel: SharedRenderViewModel? = null  // 共享渲染数据的 ViewModel
+    onNavigateToRender: (() -> Unit)? = null,        // 跳转到渲染页面的回调（预留）
+    sharedViewModel: SharedRenderViewModel? = null  // 共享渲染数据的 ViewModel（预留）
 ) {
     // 创建 ViewModel，传入 sharedViewModel
     val viewModel: ChatViewModel = viewModel(
