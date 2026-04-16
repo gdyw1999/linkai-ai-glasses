@@ -16,8 +16,8 @@ object LinkAIClient {
 
     private const val BASE_URL = "https://api.link-ai.tech/"
     private const val CONNECT_TIMEOUT = 30L
-    private const val READ_TIMEOUT = 180L  // 3分钟，适配慢速LLM回复（实测132秒）
-    private const val WRITE_TIMEOUT = 60L
+    private const val READ_TIMEOUT = 240L  // 4分钟，适配慢速LLM回复（实测132秒+余量）
+    private const val WRITE_TIMEOUT = 240L // 写入超时同步增加，防止长请求写入中断
 
     // 当前使用的 API Key（运行时动态更新）
     @Volatile
