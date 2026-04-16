@@ -528,7 +528,7 @@ private fun SecondarySelectorBar(
  */
 @Composable
 fun MessageBubble(
-    message: Message,
+    message: ChatMessage,
     onPlayAudio: () -> Unit
 ) {
     Row(
