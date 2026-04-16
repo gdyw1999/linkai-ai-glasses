@@ -1020,7 +1020,7 @@ class ChatViewModel(
                 delay(3000)
 
                 // 4. 启动同步
-                syncManager.startSync { success, message ->
+                syncManager.startSync { _, _ ->
                     // SDK 的 startSync 是异步的，这里用 suspendCancellableCoroutine 包装
                 }
 
