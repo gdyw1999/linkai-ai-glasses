@@ -114,9 +114,12 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.1.1")
 
     // Markdown 渲染
-    implementation("io.noties.markwon:core:4.6.2")
-    implementation("io.noties.markwon:html:4.6.2")
-    implementation("io.noties.markwon:syntax-highlight:4.6.2")
+    implementation("io.noties.markwon:core:4.6.2") {
+        exclude(group = "org.jetbrains", module = "annotations")
+    }
+    implementation("io.noties.markwon:html:4.6.2") {
+        exclude(group = "org.jetbrains", module = "annotations")
+    }
     
     // 测试库
     testImplementation("junit:junit:4.13.2")
