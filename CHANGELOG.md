@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the Linkai星韵AI眼镜Android App project will be documented in this file.
+All notable changes to the 智教未来 (Linkai Future) Android App project will be documented in this file.
 
 ## [0.219] - 2026-05-12
 
@@ -26,7 +26,7 @@ All notable changes to the Linkai星韵AI眼镜Android App project will be docum
   - `ChatViewModel.kt` — 新增 `triggerWakeupRecording()` 公共方法
   - `ChatScreen.kt` — 新增 `wakeupTrigger` 参数 + 自动录音 LaunchedEffect
 
-## [0.218] - 2026-04-17
+## [0.218] - 2026-05-10
 
 ### Changed - 超级AI助理接入 + 统一图片处理流程
 
@@ -44,7 +44,7 @@ All notable changes to the Linkai星韵AI眼镜Android App project will be docum
 - **App Code 配置**
   - 在「我的」→「API配置」中把 App Code 改为超级AI助理的 code 即可生效
 
-## [0.217] - 2026-04-16
+## [0.217] - 2026-04-26
 
 ### Added - 流式输出 + 思考过程 + Token 日志
 

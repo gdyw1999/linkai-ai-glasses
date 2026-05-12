@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Linkai星韵AI眼镜配套 Android App（Kotlin + Jetpack Compose）。MVVM 架构，minSdk 24 / targetSdk 34。
+智教未来（Linkai Future）Android App — AI教育平台移动端。配合 Linkai星韵AI眼镜 增强体验（可选）。Kotlin + Jetpack Compose，MVVM 架构，minSdk 24 / targetSdk 34。
 
 ## 构建命令
 
