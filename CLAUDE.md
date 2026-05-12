@@ -34,8 +34,8 @@ app/build/outputs/apk/debug/app-debug.apk
 版本号在 `app/build.gradle.kts` 中维护，格式为 `0.xxx`，每次改动 +1：
 
 ```kotlin
-versionCode = 215   // 与 versionName 同步递增
-versionName = "0.215"
+versionCode = 219   // 与 versionName 同步递增
+versionName = "0.219"
 ```
 
 ## 架构要点

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
@@ -19,25 +20,42 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
+import com.glasses.app.service.GlassesConnectionService
 import com.glasses.app.ui.navigation.NavGraph
 import com.glasses.app.ui.navigation.NavRoutes
 import com.glasses.app.ui.permission.PermissionDeniedDialog
 import com.glasses.app.ui.permission.PermissionScreen
 import com.glasses.app.ui.theme.GlassesAppTheme
 import com.glasses.app.util.PermissionHelper
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * 主Activity
  * 使用Jetpack Compose构建UI
  */
 class MainActivity : ComponentActivity() {
-    
+
     private lateinit var permissionHelper: PermissionHelper
+
+    // 唤醒导航事件流：onNewIntent 设置 → MainScreen composable 消费
+    internal val _wakeupTrigger = MutableStateFlow(false)
+    val wakeupTrigger: StateFlow<Boolean> = _wakeupTrigger.asStateFlow()
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        if (intent?.action == GlassesConnectionService.ACTION_WAKEUP_CHAT) {
+            Log.d("MainActivity", "Wakeup chat action received")
+            _wakeupTrigger.value = true
+        }
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -118,8 +136,20 @@ private fun AppContent(permissionHelper: PermissionHelper) {
  */
 @Composable
 fun MainScreen() {
+    val context = LocalContext.current
+    val activity = context as? MainActivity
     val navController = rememberNavController()
     var currentRoute by remember { mutableStateOf(NavRoutes.CONVERSATION_LIST) }
+
+    // 监听唤醒事件：Service 设置 wakeupTrigger → 此处消费并导航到对话页
+    LaunchedEffect(Unit) {
+        activity?.wakeupTrigger?.collect { triggered ->
+            if (triggered) {
+                activity._wakeupTrigger.value = false
+                navController.navigate(NavRoutes.chatRoute(0L, wakeup = true))
+            }
+        }
+    }
 
     // 监听导航变化
     LaunchedEffect(navController) {

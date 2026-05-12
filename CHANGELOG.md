@@ -2,6 +2,90 @@
 
 All notable changes to the Linkai星韵AI眼镜Android App project will be documented in this file.
 
+## [0.219] - 2026-05-12
+
+### Added - 唤醒词"嘿塞恩"接入对话流程
+
+- **唤醒词端到端流程**
+  - 眼镜端本地检测唤醒词"嘿塞恩"后，通过 SDK 回调 `CMD_MICROPHONE(0x03)` 通知 APP
+  - `GlassesDeviceNotifyListener` 接收回调，调用 `WakeupManager.onVoiceWakeup("嘿塞恩")`
+  - `GlassesConnectionService` 初始化 WakeupManager 并注册唤醒回调，触发后跳转 MainActivity
+  - `MainActivity.onNewIntent()` 接收唤醒 Intent，通过 StateFlow 通知 Compose 导航到对话页面
+  - `ChatScreen` 检测唤醒标记后延迟 500ms 自动开始录音，走 ASR → 超级AI助理流程
+
+- **Service → Activity 导航**
+  - AndroidManifest 为 MainActivity 添加 `launchMode="singleTop"`，确保 `onNewIntent()` 被调用
+  - 支持后台唤醒：APP 在后台时唤醒能拉起前台并跳转到对话页面
+
+- **改动文件**（7 个文件，0 个新文件）
+  - `GlassesSDKManager.kt` — 新增 `getAppContext()` 供 Listener 获取 Context
+  - `GlassesDeviceNotifyListener.kt` — CMD_MICROPHONE 分支触发 WakeupManager
+  - `GlassesConnectionService.kt` — 初始化 WakeupManager 回调 + `handleWakeupTrigger()`
+  - `MainActivity.kt` — `wakeupTrigger` StateFlow + `onNewIntent()` + MainScreen 监听导航
+  - `NavGraph.kt` — chat 路由增加 `?wakeup={wakeup}` 查询参数
+  - `ChatViewModel.kt` — 新增 `triggerWakeupRecording()` 公共方法
+  - `ChatScreen.kt` — 新增 `wakeupTrigger` 参数 + 自动录音 LaunchedEffect
+
+## [0.218] - 2026-04-17
+
+### Changed - 超级AI助理接入 + 统一图片处理流程
+
+- **对话 API 切换到超级AI助理**
+  - `LinkAIModels.kt` 新增 `CompletionsRequest` + `ChatMessageItem`（OpenAI messages 格式）
+  - `LinkAIService.kt` 新增 `completionsStreaming()` 端点 `v1/chat/completions`
+  - `AIServiceImpl.kt` 的 `chatStreaming()` 改用新端点 + `messages` 格式请求
+
+- **统一图片处理流程**
+  - `ChatViewModel` 新增 `sendToSuperAssistant()` 公共方法，复用流式处理逻辑
+  - `recognizeImageAndSend()` 改为：千问识别 → 描述作为用户消息 → 超级AI助理流式回复
+  - `consumeSmartRecognitionResult()` 同上逻辑
+  - 流程：任何来源添加图片 → 千问识别 → 识别结果作为用户消息 → 超级AI助理 → 继续对话
+
+- **App Code 配置**
+  - 在「我的」→「API配置」中把 App Code 改为超级AI助理的 code 即可生效
+
+## [0.217] - 2026-04-16
+
+### Added - 流式输出 + 思考过程 + Token 日志
+
+- **流式对话输出优化**
+  - `AIServiceImpl.kt` 新增 `StreamingChunk` 密封类（Reasoning/Content/Usage/Done 四种类型）
+  - `chatStreaming()` 返回 `Flow<StreamingChunk>`，支持思考过程和正文分离输出
+  - `LinkAIModels.kt` Delta 加 `reasoningContent`；新增 `StreamOptions`
+
+- **思考过程展示**
+  - `MessageEntity.kt` 新增 `thinkingContent` 字段，Room 数据库 version 1→2
+  - `ChatMessage` 加 `thinkingContent`，UI 层保存思考内容
+  - `ChatScreen.kt` MessageBubble 新增思考过程折叠区（点击展开/收起，浅灰色文字）
+  - `ChatViewModel` 新增 `updateAIThinkingAndContent()` 方法
+
+- **Token 用量日志**
+  - Token 用量通过 AppLogger 记录（prompt/completion/total）
+  - `ConversationRepository` 的 `addMessage()` 加 `thinkingContent` 参数，导出/导入支持该字段
+
+- **兼容性**
+  - 非 R1 模型无 `reasoningContent` 时，思考区域不显示，流式正文仍正常输出
+
+- **唤醒词端到端流程**
+  - 眼镜端本地检测唤醒词"嘿塞恩"后，通过 SDK 回调 `CMD_MICROPHONE(0x03)` 通知 APP
+  - `GlassesDeviceNotifyListener` 接收回调，调用 `WakeupManager.onVoiceWakeup("嘿塞恩")`
+  - `GlassesConnectionService` 初始化 WakeupManager 并注册唤醒回调，触发后跳转 MainActivity
+  - `MainActivity.onNewIntent()` 接收唤醒 Intent，通过 StateFlow 通知 Compose 导航到对话页面
+  - `ChatScreen` 检测唤醒标记后延迟 500ms 自动开始录音，走 ASR → 超级AI助理流程
+
+- **Service → Activity 导航**
+  - AndroidManifest 为 MainActivity 添加 `launchMode="singleTop"`，确保 `onNewIntent()` 被调用
+  - 支持后台唤醒：APP 在后台时唤醒能拉起前台并跳转到对话页面
+
+- **改动文件**（7 个文件，0 个新文件）
+  - `GlassesSDKManager.kt` — 新增 `getAppContext()` 供 Listener 获取 Context
+  - `GlassesDeviceNotifyListener.kt` — CMD_MICROPHONE 分支触发 WakeupManager
+  - `GlassesConnectionService.kt` — 初始化 WakeupManager 回调 + `handleWakeupTrigger()`
+  - `MainActivity.kt` — `wakeupTrigger` StateFlow + `onNewIntent()` + MainScreen 监听导航
+  - `NavGraph.kt` — chat 路由增加 `?wakeup={wakeup}` 查询参数
+  - `ChatViewModel.kt` — 新增 `triggerWakeupRecording()` 公共方法
+  - `ChatScreen.kt` — 新增 `wakeupTrigger` 参数 + 自动录音 LaunchedEffect
+
 ## [0.216] - 2026-04-16
 
 ### Added - HTML/Markdown 内容渲染页面

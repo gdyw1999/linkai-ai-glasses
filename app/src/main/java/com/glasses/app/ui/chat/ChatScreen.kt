@@ -4,7 +4,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,7 +29,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.painterResource
 import coil.request.ImageRequest
@@ -66,6 +64,7 @@ fun ChatScreen(
     innerPadding: PaddingValues = PaddingValues(),
     onBack: (() -> Unit)? = null,
     conversationId: Long = 0L,
+    wakeupTrigger: Boolean = false,                   // 是否由唤醒词触发进入
     onNavigateToRender: (() -> Unit)? = null,        // 跳转到渲染页面的回调（预留）
     sharedViewModel: SharedRenderViewModel? = null  // 共享渲染数据的 ViewModel（预留）
 ) {
@@ -109,6 +108,7 @@ fun ChatScreen(
     }
 
     // 手机拍照 - TakePicture Launcher
+    @Suppress("UNUSED_VARIABLE")
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -128,6 +128,14 @@ fun ChatScreen(
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
+        }
+    }
+
+    // 唤醒词触发自动录音：等待页面渲染完成后开始录音
+    LaunchedEffect(wakeupTrigger) {
+        if (wakeupTrigger) {
+            kotlinx.coroutines.delay(500)
+            viewModel.triggerWakeupRecording()
         }
     }
     
@@ -557,6 +565,41 @@ fun MessageBubble(
             Column(
                 modifier = Modifier.padding(12.dp)
             ) {
+                // 思考过程（仅 AI 消息且有思考内容时显示）
+                if (!message.isUser && !message.thinkingContent.isNullOrEmpty()) {
+                    var expanded by remember { mutableStateOf(false) }
+                    Column {
+                        Row(
+                            modifier = Modifier.clickable { expanded = !expanded },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Star,
+                                "思考",
+                                tint = Color(0xFF9E9E9E),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("思考过程", fontSize = 12.sp, color = Color(0xFF9E9E9E))
+                            Icon(
+                                if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                "展开",
+                                tint = Color(0xFF9E9E9E),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        AnimatedVisibility(expanded) {
+                            Text(
+                                message.thinkingContent,
+                                fontSize = 11.sp,
+                                color = Color(0xFF9E9E9E),
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+
                 Text(
                     text = message.content,
                     style = MaterialTheme.typography.bodyMedium,

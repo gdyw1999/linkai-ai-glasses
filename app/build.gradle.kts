@@ -12,8 +12,8 @@ android {
         applicationId = "com.glasses.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 216
-        versionName = "0.216"
+        versionCode = 219
+        versionName = "0.219"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

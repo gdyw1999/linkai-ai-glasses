@@ -33,6 +33,9 @@ data class MessageEntity(
     val role: String, // "user" or "assistant"
     
     val audioUrl: String? = null,
-    
+
+    // AI 思考过程（DeepSeek-R1 等推理模型）
+    val thinkingContent: String? = null,
+
     val createdAt: Long = System.currentTimeMillis()
 )

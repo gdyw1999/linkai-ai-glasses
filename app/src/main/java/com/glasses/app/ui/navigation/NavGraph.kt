@@ -23,14 +23,16 @@ import com.glasses.app.viewmodel.SharedRenderViewModel
 object NavRoutes {
     const val CONVERSATION_LIST = "conversation_list"
     const val HOME = "home"
-    const val CHAT = "chat/{conversationId}"
+    const val CHAT = "chat/{conversationId}?wakeup={wakeup}"
     const val GALLERY = "gallery"
     const val PROFILE = "profile"
     const val DEVICE_SCAN = "device_scan"
     const val CONTENT_RENDER = "content_render"  // 内容渲染页面
 
-    /** 构建 Chat 路由，传入会话 ID */
-    fun chatRoute(conversationId: Long): String = "chat/$conversationId"
+    /** 构建 Chat 路由，传入会话 ID 和可选的唤醒标记 */
+    fun chatRoute(conversationId: Long, wakeup: Boolean = false): String {
+        return if (wakeup) "chat/$conversationId?wakeup=true" else "chat/$conversationId"
+    }
 }
 
 /**
@@ -72,14 +74,16 @@ fun NavGraph(navController: NavHostController, innerPadding: PaddingValues = Pad
             )
         }
 
-        // AI对话（全屏，从对话列表进入）
+        // AI对话（全屏，从对话列表或唤醒词进入）
         composable(
             route = NavRoutes.CHAT,
             arguments = listOf(
-                navArgument("conversationId") { type = NavType.LongType }
+                navArgument("conversationId") { type = NavType.LongType },
+                navArgument("wakeup") { type = NavType.BoolType; defaultValue = false }
             )
         ) { backStackEntry ->
             val conversationId = backStackEntry.arguments?.getLong("conversationId") ?: 0L
+            val wakeup = backStackEntry.arguments?.getBoolean("wakeup") ?: false
             // 获取共享 ViewModel（在多个页面间共享）
             val sharedViewModel: SharedRenderViewModel = viewModel()
 
@@ -87,6 +91,7 @@ fun NavGraph(navController: NavHostController, innerPadding: PaddingValues = Pad
                 innerPadding = PaddingValues(),
                 onBack = { navController.popBackStack() },
                 conversationId = conversationId,
+                wakeupTrigger = wakeup,
                 onNavigateToRender = {
                     // 跳转到内容渲染页面
                     navController.navigate(NavRoutes.CONTENT_RENDER)

@@ -7,6 +7,9 @@ import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.glasses.app.data.remote.api.model.ChatRequest
 import com.glasses.app.data.remote.api.model.ChatResponse
+import com.glasses.app.data.remote.api.model.ChatMessageItem
+import com.glasses.app.data.remote.api.model.CompletionsRequest
+import com.glasses.app.data.remote.api.model.StreamOptions
 import com.glasses.app.data.remote.api.model.TTSRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -303,57 +306,98 @@ class AIServiceImpl(private val context: Context) {
     }
 
     /**
-     * 流式对话生成（LLM）
-     * 流式输出AI回复
-     * 
+     * 流式对话生成（超级AI助理 / 通用对话接口）
+     * 使用 v1/chat/completions 端点，OpenAI 兼容的 messages 格式
+     * 支持思考过程（reasoning_content）和 token 用量统计
+     *
      * @param question 用户问题
-     * @param sessionId 会话ID
-     * @param appCode 应用code（可选）
-     * @return 流式文本片段
+     * @param sessionId 会话ID（超级AI助理用于复用上下文）
+     * @param appCode 超级AI助理/应用/工作流的 code
+     * @return 流式分块（思考/正文/用量/完成）
      */
     fun chatStreaming(
         question: String,
         sessionId: String,
         appCode: String? = null
-    ): Flow<String> = flow {
+    ): Flow<StreamingChunk> = flow {
         try {
             val apiKeyManager = com.glasses.app.data.local.prefs.ApiKeyManager.getInstance(context)
             if (!apiKeyManager.hasLinkAIChatApiKey()) {
                 throw Exception("请先在「我的」→「API配置」中设置 LinkAI 对话 API Key")
             }
 
-            Log.d(TAG, "Sending streaming chat request: question=$question")
-            
-            val request = ChatRequest(
-                question = question,
+            Log.d(TAG, "Sending completions streaming request: question=$question")
+
+            val request = CompletionsRequest(
+                messages = listOf(ChatMessageItem(role = "user", content = question)),
                 sessionId = sessionId,
                 appCode = appCode,
-                stream = true
+                stream = true,
+                streamOptions = StreamOptions(true)
             )
-            
-            val response = apiService.chatStreaming(request)
-            
+
+            val response = apiService.completionsStreaming(request)
+
             if (response.isSuccessful && response.body() != null) {
                 val responseBody = response.body()!!
                 val reader = responseBody.byteStream().bufferedReader()
-                
+
                 reader.useLines { lines ->
                     for (line in lines) {
                         if (line.startsWith("data: ")) {
                             val data = line.substring(6).trim()
-                            
-                            // 检查是否结束
+
+                            // 流结束标记
                             if (data == "[DONE]") {
                                 Log.d(TAG, "Streaming completed")
+                                emit(StreamingChunk.Done)
                                 break
                             }
-                            
-                            // 解析JSON并提取content
+
+                            // 解析 JSON，同时检查 reasoning_content 和 content
                             try {
-                                val json = com.google.gson.Gson().fromJson(data, ChatResponse::class.java)
-                                val content = json.choices.firstOrNull()?.delta?.content
-                                if (!content.isNullOrEmpty()) {
-                                    emit(content)
+                                val json = JsonParser().parse(data).asJsonObject
+
+                                // 提取 usage（可能在任何 chunk 中出现）
+                                val usageObj = json.getAsJsonObject("usage")
+                                if (usageObj != null) {
+                                    try {
+                                        emit(StreamingChunk.Usage(
+                                            promptTokens = usageObj.get("prompt_tokens").asInt,
+                                            completionTokens = usageObj.get("completion_tokens").asInt,
+                                            totalTokens = usageObj.get("total_tokens").asInt
+                                        ))
+                                        Log.d(TAG, "Token usage: prompt=${usageObj.get("prompt_tokens")} completion=${usageObj.get("completion_tokens")} total=${usageObj.get("total_tokens")}")
+                                    } catch (_: Exception) { /* usage 字段不完整则跳过 */ }
+                                }
+
+                                val choices = json.getAsJsonArray("choices")
+                                if (choices != null && choices.size() > 0) {
+                                    val firstChoice = choices.get(0).asJsonObject
+
+                                    // 安全获取 delta 对象
+                                    val deltaEl = firstChoice.get("delta")
+                                    if (deltaEl != null && deltaEl.isJsonObject) {
+                                        val delta = deltaEl.asJsonObject
+
+                                        // 思考过程（DeepSeek-R1 等）
+                                        val reasoningEl = delta.get("reasoning_content")
+                                        if (reasoningEl != null && reasoningEl.isJsonPrimitive) {
+                                            val reasoning = reasoningEl.asString
+                                            if (reasoning.isNotEmpty()) {
+                                                emit(StreamingChunk.Reasoning(reasoning))
+                                            }
+                                        }
+
+                                        // 正文内容
+                                        val contentEl = delta.get("content")
+                                        if (contentEl != null && contentEl.isJsonPrimitive) {
+                                            val content = contentEl.asString
+                                            if (content.isNotEmpty()) {
+                                                emit(StreamingChunk.Content(content))
+                                            }
+                                        }
+                                    }
                                 }
                             } catch (e: Exception) {
                                 Log.w(TAG, "Failed to parse streaming data: $data", e)
@@ -364,7 +408,7 @@ class AIServiceImpl(private val context: Context) {
             } else {
                 throw Exception("Streaming chat failed: ${response.code()} - ${response.message()}")
             }
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Streaming chat error", e)
             throw e
@@ -509,4 +553,19 @@ sealed class ChatState {
     object Synthesizing : ChatState()
     data class Completed(val audioFile: File) : ChatState()
     data class Error(val message: String) : ChatState()
+}
+
+/**
+ * 流式对话分块类型
+ * 用于区分思考过程、正文内容、token 用量和流结束
+ */
+sealed class StreamingChunk {
+    /** AI 思考过程（DeepSeek-R1 等推理模型） */
+    data class Reasoning(val text: String) : StreamingChunk()
+    /** 正文内容 */
+    data class Content(val text: String) : StreamingChunk()
+    /** Token 用量统计 */
+    data class Usage(val promptTokens: Int, val completionTokens: Int, val totalTokens: Int) : StreamingChunk()
+    /** 流结束 */
+    object Done : StreamingChunk()
 }

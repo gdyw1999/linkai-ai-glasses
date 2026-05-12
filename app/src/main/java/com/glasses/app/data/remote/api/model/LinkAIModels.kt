@@ -6,6 +6,39 @@ import com.google.gson.annotations.SerializedName
  * LinkAI API数据模型
  */
 
+// ==================== 超级AI助理（v1/chat/completions）====================
+
+/**
+ * 超级AI助理请求（OpenAI 兼容格式）
+ */
+data class CompletionsRequest(
+    @SerializedName("messages")
+    val messages: List<ChatMessageItem>,
+
+    @SerializedName("app_code")
+    val appCode: String? = null,
+
+    @SerializedName("session_id")
+    val sessionId: String? = null,
+
+    @SerializedName("stream")
+    val stream: Boolean = false,
+
+    @SerializedName("stream_options")
+    val streamOptions: StreamOptions? = null
+)
+
+/**
+ * 聊天消息项（OpenAI messages 格式）
+ */
+data class ChatMessageItem(
+    @SerializedName("role")
+    val role: String,
+
+    @SerializedName("content")
+    val content: String
+)
+
 // ==================== ASR（语音识别）====================
 
 /**
@@ -39,9 +72,13 @@ data class ChatRequest(
     
     @SerializedName("stream")
     val stream: Boolean = false,
-    
+
     @SerializedName("image_url")
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+
+    // 流式请求选项（请求 token 用量统计）
+    @SerializedName("stream_options")
+    val streamOptions: StreamOptions? = null
 )
 
 /**
@@ -91,7 +128,19 @@ data class Message(
  */
 data class Delta(
     @SerializedName("content")
-    val content: String? = null
+    val content: String? = null,
+
+    // DeepSeek-R1 等推理模型的思考过程
+    @SerializedName("reasoning_content")
+    val reasoningContent: String? = null
+)
+
+/**
+ * 流式请求选项（用于获取 token 用量）
+ */
+data class StreamOptions(
+    @SerializedName("include_usage")
+    val includeUsage: Boolean = true
 )
 
 /**

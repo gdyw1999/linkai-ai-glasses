@@ -40,6 +40,7 @@ class GlassesConnectionService : Service() {
         // Intent Actions
         const val ACTION_START_SERVICE = "com.glasses.app.action.START_SERVICE"
         const val ACTION_STOP_SERVICE = "com.glasses.app.action.STOP_SERVICE"
+        const val ACTION_WAKEUP_CHAT = "com.glasses.app.action.WAKEUP_CHAT"
         
         /**
          * 启动前台服务
@@ -98,10 +99,14 @@ class GlassesConnectionService : Service() {
             sdkManager = GlassesSDKManager.getInstance(applicationContext)
             Log.d(TAG, "Step 2: SDK manager initialized ✓")
 
-            // 步骤3：初始化唤醒管理器（可选，失败不影响）
+            // 步骤3：初始化唤醒管理器并注册回调
             Log.d(TAG, "Step 3: Initializing wakeup manager...")
             try {
                 wakeupManager = WakeupManager.getInstance(applicationContext)
+                wakeupManager.initialize {
+                    // 唤醒回调：跳转到对话页面并自动录音
+                    handleWakeupTrigger()
+                }
                 Log.d(TAG, "Step 3: Wakeup manager initialized ✓")
             } catch (e: Exception) {
                 Log.w(TAG, "Step 3: Wakeup manager init failed (non-critical)", e)
@@ -166,6 +171,23 @@ class GlassesConnectionService : Service() {
         return null
     }
     
+    /**
+     * 唤醒触发处理：跳转到 MainActivity 并携带唤醒 action
+     * 无论 APP 在前台还是后台，singleTop 确保 onNewIntent 被调用
+     */
+    private fun handleWakeupTrigger() {
+        Log.d(TAG, "Wakeup triggered! Navigating to chat...")
+        // 重置唤醒状态，防止重复触发
+        wakeupManager.resetState()
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            action = ACTION_WAKEUP_CHAT
+        }
+        startActivity(intent)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "Service onDestroy")

@@ -2,6 +2,7 @@ package com.glasses.app.data.remote.api
 
 import com.glasses.app.data.remote.api.model.ChatRequest
 import com.glasses.app.data.remote.api.model.ChatResponse
+import com.glasses.app.data.remote.api.model.CompletionsRequest
 import com.glasses.app.data.remote.api.model.TTSRequest
 import com.glasses.app.data.remote.api.model.TranscriptionResponse
 import okhttp3.MultipartBody
@@ -43,7 +44,7 @@ interface LinkAIService {
     /**
      * 流式记忆对话（LLM）
      * 流式输出的对话API
-     * 
+     *
      * @param request 对话请求（stream=true）
      * @return 流式响应
      */
@@ -51,6 +52,16 @@ interface LinkAIService {
     @POST("v1/chat/memory/completions")
     suspend fun chatStreaming(
         @Body request: ChatRequest
+    ): Response<ResponseBody>
+
+    /**
+     * 超级AI助理 / 通用对话接口（OpenAI 兼容格式）
+     * 支持超级AI助理、应用、工作流等
+     */
+    @Streaming
+    @POST("v1/chat/completions")
+    suspend fun completionsStreaming(
+        @Body request: CompletionsRequest
     ): Response<ResponseBody>
     
     /**

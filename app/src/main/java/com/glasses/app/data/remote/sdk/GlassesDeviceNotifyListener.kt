@@ -1,6 +1,7 @@
 package com.glasses.app.data.remote.sdk
 
 import android.util.Log
+import com.glasses.app.service.wakeup.WakeupManager
 import com.oudmon.ble.base.communication.bigData.resp.GlassesDeviceNotifyListener
 import com.oudmon.ble.base.communication.bigData.resp.GlassesDeviceNotifyRsp
 
@@ -50,7 +51,10 @@ class GlassesDeviceNotifyListener(
 
                 CMD_MICROPHONE -> {
                     if (data.size >= 8 && data[7].toInt() == 1) {
-                        Log.d(TAG, "Microphone activated - user started speaking")
+                        Log.d(TAG, "Microphone activated - voice wakeup")
+                        // 眼镜端检测到唤醒词，通知 WakeupManager
+                        WakeupManager.getInstance(sdkManager.getAppContext())
+                            .onVoiceWakeup("嘿塞恩")
                     }
                 }
 

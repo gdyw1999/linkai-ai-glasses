@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.glasses.app.data.remote.api.AIServiceImpl
+import com.glasses.app.data.remote.api.StreamingChunk
 import com.glasses.app.data.remote.sdk.ConnectionState
 import com.glasses.app.data.remote.sdk.GlassesSDKManager
 import com.glasses.app.data.remote.sdk.MediaCaptureManager
@@ -36,7 +37,9 @@ data class ChatMessage(
     val content: String = "",
     val isUser: Boolean = true,
     val timestamp: Long = System.currentTimeMillis(),
-    val audioUrl: String? = null
+    val audioUrl: String? = null,
+    // AI 思考过程（DeepSeek-R1 等推理模型）
+    val thinkingContent: String? = null
 )
 
 /**
@@ -235,7 +238,8 @@ class ChatViewModel(
                     content = entity.content,
                     isUser = entity.role == "user",
                     timestamp = entity.createdAt,
-                    audioUrl = entity.audioUrl
+                    audioUrl = entity.audioUrl,
+                    thinkingContent = entity.thinkingContent
                 )
             }
             _uiState.value = _uiState.value.copy(messages = uiMessages)
@@ -320,6 +324,15 @@ class ChatViewModel(
     }
     
     /**
+     * 唤醒后自动开始录音
+     * 由 ChatScreen 在检测到唤醒标记时调用
+     */
+    fun triggerWakeupRecording() {
+        com.glasses.app.util.AppLogger.i(TAG, "唤醒触发: 自动开始录音")
+        startRecording()
+    }
+
+    /**
      * 停止录音
      */
     fun stopRecording() {
@@ -374,22 +387,44 @@ class ChatViewModel(
                     statusMessage = "AI思考中..."
                 )
 
+                // 添加空的 AI 消息占位（流式更新会填充内容）
+                addAssistantMessage("")
+
+                // 流式累积变量
+                var thinkingContent = ""
+                var content = ""
+
                 // 流式对话生成（携带 app_code 以指定 LinkAI 工作流）
                 val sessionId = currentConversationId.toString()
                 val appCode = apiKeyManager.getLinkAIAppCode().ifEmpty { null }
-                aiService.chatStreaming(trimmedText, sessionId, appCode).collect { textChunk ->
-                    streamingChatManager.processStreamingText(textChunk)
+                aiService.chatStreaming(trimmedText, sessionId, appCode).collect { chunk ->
+                    when (chunk) {
+                        is StreamingChunk.Reasoning -> {
+                            thinkingContent += chunk.text
+                            updateAIThinkingAndContent(thinkingContent, content)
+                            _uiState.value = _uiState.value.copy(statusMessage = "AI思考中...")
+                        }
+                        is StreamingChunk.Content -> {
+                            content += chunk.text
+                            updateAIThinkingAndContent(thinkingContent, content)
+                            _uiState.value = _uiState.value.copy(statusMessage = "")
+                        }
+                        is StreamingChunk.Usage -> {
+                            com.glasses.app.util.AppLogger.i(
+                                "TokenUsage",
+                                "会话=$currentConversationId prompt=${chunk.promptTokens} completion=${chunk.completionTokens} total=${chunk.totalTokens}"
+                            )
+                        }
+                        is StreamingChunk.Done -> { /* 流结束 */ }
+                    }
                 }
 
-                // 流式对话完成
-                streamingChatManager.finalize()
-
-                // 保存AI消息到数据库
-                val aiText = streamingChatManager.displayText.value
+                // 保存AI消息到数据库（含思考过程）
                 conversationRepository.addMessage(
                     conversationId = currentConversationId,
-                    content = aiText,
-                    role = "assistant"
+                    content = content,
+                    role = "assistant",
+                    thinkingContent = thinkingContent.ifEmpty { null }
                 )
 
                 _uiState.value = _uiState.value.copy(
@@ -445,7 +480,7 @@ class ChatViewModel(
                     isProcessing = true,
                     statusMessage = "语音识别中..."
                 )
-                
+
                 // 1. ASR - 语音识别
                 val asrResult = aiService.transcribeAudio(audioFile)
                 if (asrResult.isFailure) {
@@ -455,7 +490,7 @@ class ChatViewModel(
                     )
                     return@launch
                 }
-                
+
                 val userText = asrResult.getOrNull()!!
                 Log.d(TAG, "ASR result: $userText")
 
@@ -468,42 +503,68 @@ class ChatViewModel(
 
                 // 添加用户消息到UI
                 addUserMessage(userText)
-                
+
                 // 保存用户消息到数据库
                 conversationRepository.addMessage(
                     conversationId = currentConversationId,
                     content = userText,
                     role = "user"
                 )
-                
+
                 _uiState.value = _uiState.value.copy(
                     statusMessage = "AI思考中..."
                 )
-                
+
+                // 添加空的 AI 消息占位
+                addAssistantMessage("")
+
+                // 流式累积变量
+                var thinkingContent = ""
+                var content = ""
+
                 // 2. LLM - 流式对话生成（携带 app_code 以指定 LinkAI 工作流）
                 val sessionId = currentConversationId.toString()
                 val appCode = apiKeyManager.getLinkAIAppCode().ifEmpty { null }
-                aiService.chatStreaming(userText, sessionId, appCode).collect { textChunk ->
-                    // 处理流式文本
-                    streamingChatManager.processStreamingText(textChunk)
+                aiService.chatStreaming(userText, sessionId, appCode).collect { chunk ->
+                    when (chunk) {
+                        is StreamingChunk.Reasoning -> {
+                            thinkingContent += chunk.text
+                            updateAIThinkingAndContent(thinkingContent, content)
+                            _uiState.value = _uiState.value.copy(statusMessage = "AI思考中...")
+                        }
+                        is StreamingChunk.Content -> {
+                            content += chunk.text
+                            updateAIThinkingAndContent(thinkingContent, content)
+                            _uiState.value = _uiState.value.copy(statusMessage = "")
+                            // 语音对话：仅对正文部分攒句合成 TTS
+                            streamingChatManager.processStreamingText(chunk.text)
+                        }
+                        is StreamingChunk.Usage -> {
+                            com.glasses.app.util.AppLogger.i(
+                                "TokenUsage",
+                                "会话=$currentConversationId prompt=${chunk.promptTokens} completion=${chunk.completionTokens} total=${chunk.totalTokens}"
+                            )
+                        }
+                        is StreamingChunk.Done -> { /* 流结束 */ }
+                    }
                 }
-                
-                // 流式对话完成
+
+                // 流式对话完成（TTS 队列收尾）
                 streamingChatManager.finalize()
-                
-                // 保存AI消息到数据库
-                val aiText = streamingChatManager.displayText.value
+
+                // 保存AI消息到数据库（含思考过程）
                 conversationRepository.addMessage(
                     conversationId = currentConversationId,
-                    content = aiText,
-                    role = "assistant"
+                    content = content,
+                    role = "assistant",
+                    thinkingContent = thinkingContent.ifEmpty { null }
                 )
-                
+
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
                     statusMessage = ""
                 )
-                
+
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to process recorded audio", e)
                 _uiState.value = _uiState.value.copy(
@@ -567,10 +628,85 @@ class ChatViewModel(
             )
             currentMessages.add(message)
         }
-        
+
         _uiState.value = _uiState.value.copy(messages = currentMessages)
     }
-    
+
+    /**
+     * 流式更新 AI 消息的思考过程和正文内容
+     */
+    private fun updateAIThinkingAndContent(thinking: String, content: String) {
+        val currentMessages = _uiState.value.messages.toMutableList()
+        val lastMessage = currentMessages.lastOrNull()
+        if (lastMessage != null && !lastMessage.isUser) {
+            val lastIndex = currentMessages.lastIndex
+            currentMessages[lastIndex] = currentMessages[lastIndex].copy(
+                thinkingContent = thinking.ifEmpty { null },
+                content = content
+            )
+        } else {
+            currentMessages.add(ChatMessage(
+                id = System.currentTimeMillis().toString(),
+                content = content,
+                isUser = false,
+                timestamp = System.currentTimeMillis(),
+                thinkingContent = thinking.ifEmpty { null }
+            ))
+        }
+        _uiState.value = _uiState.value.copy(messages = currentMessages)
+    }
+
+    /**
+     * 发送消息给超级AI助理（公共方法）
+     * 添加空 AI 占位 → 流式收集 → 保存数据库
+     *
+     * @param userMessage 用户消息文本
+     */
+    private suspend fun sendToSuperAssistant(userMessage: String) {
+        addAssistantMessage("")
+
+        var thinkingContent = ""
+        var content = ""
+
+        val sessionId = currentConversationId.toString()
+        val appCode = apiKeyManager.getLinkAIAppCode().ifEmpty { null }
+
+        aiService.chatStreaming(userMessage, sessionId, appCode).collect { chunk ->
+            when (chunk) {
+                is StreamingChunk.Reasoning -> {
+                    thinkingContent += chunk.text
+                    updateAIThinkingAndContent(thinkingContent, content)
+                    _uiState.value = _uiState.value.copy(statusMessage = "AI思考中...")
+                }
+                is StreamingChunk.Content -> {
+                    content += chunk.text
+                    updateAIThinkingAndContent(thinkingContent, content)
+                    _uiState.value = _uiState.value.copy(statusMessage = "")
+                }
+                is StreamingChunk.Usage -> {
+                    com.glasses.app.util.AppLogger.i(
+                        "TokenUsage",
+                        "会话=$currentConversationId prompt=${chunk.promptTokens} completion=${chunk.completionTokens} total=${chunk.totalTokens}"
+                    )
+                }
+                is StreamingChunk.Done -> { /* 流结束 */ }
+            }
+        }
+
+        // 保存超级AI助理的回复
+        conversationRepository.addMessage(
+            conversationId = currentConversationId,
+            content = content,
+            role = "assistant",
+            thinkingContent = thinkingContent.ifEmpty { null }
+        )
+
+        _uiState.value = _uiState.value.copy(
+            isProcessing = false,
+            statusMessage = ""
+        )
+    }
+
     /**
      * 打断对话
      */
@@ -758,7 +894,8 @@ class ChatViewModel(
                         content = entity.content,
                         isUser = entity.role == "user",
                         timestamp = entity.createdAt,
-                        audioUrl = entity.audioUrl
+                        audioUrl = entity.audioUrl,
+                        thinkingContent = entity.thinkingContent
                     )
                 }
                 
@@ -833,7 +970,8 @@ class ChatViewModel(
     }
 
     /**
-     * 消费首页智能识图结果并写入当前对话
+     * 消费首页智能识图结果
+     * 千问识别 → 描述作为用户消息 → 发给超级AI助理
      */
     private suspend fun consumeSmartRecognitionResult(result: SmartRecognitionResult) {
         com.glasses.app.util.AppLogger.i(TAG, "收到智能识图结果: model=${result.model}, 答案长度=${result.answer.length}")
@@ -846,29 +984,28 @@ class ChatViewModel(
                 )
             }
 
-            addUserMessage(result.question)
-            addAssistantMessage(result.answer)
-
+            // 千问识别结果直接作为用户消息
+            val description = result.answer
+            addUserMessage(description)
             conversationRepository.addMessage(
                 conversationId = currentConversationId,
-                content = result.question,
+                content = description,
                 role = "user"
             )
-            conversationRepository.addMessage(
-                conversationId = currentConversationId,
-                content = result.answer,
-                role = "assistant"
-            )
 
+            // 发送给超级AI助理
             _uiState.value = _uiState.value.copy(
-                statusMessage = "已接收首页智能识图结果（模型：${result.model}）"
+                isProcessing = true,
+                statusMessage = "AI分析中..."
             )
+            sendToSuperAssistant(description)
 
-            Log.d(TAG, "Smart recognition result consumed: ${result.id}")
+            Log.d(TAG, "Smart recognition result sent to super assistant: ${result.id}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to consume smart recognition result", e)
             _uiState.value = _uiState.value.copy(
-                statusMessage = "识图结果写入失败: ${e.message}"
+                isProcessing = false,
+                statusMessage = "处理失败: ${e.message}"
             )
         } finally {
             smartRecognitionRepository.clear(result.id)
@@ -876,7 +1013,8 @@ class ChatViewModel(
     }
 
     /**
-     * 识别图片并发送到对话（Qwen 多模态分析）
+     * 识别图片并发送到对话
+     * 流程：千问识别图片 → 描述作为用户消息 → 超级AI助理回复
      * @param imagePath 图片文件路径
      * @param fileName 显示用的文件名
      */
@@ -884,98 +1022,58 @@ class ChatViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isProcessing = true,
-                statusMessage = "正在分析图片..."
+                statusMessage = "正在识别图片..."
             )
             com.glasses.app.util.AppLogger.i(TAG, "用户操作: 分析图片 $fileName")
 
             try {
-                // 1. 写用户消息
-                val userContent = "📷 分析图片: $fileName"
+                // 确保有会话
                 if (currentConversationId == 0L) {
-                    currentConversationId = conversationRepository.createConversation("图片分析")
+                    currentConversationId = conversationRepository.createConversation("新对话")
                     _uiState.value = _uiState.value.copy(
                         currentConversationId = currentConversationId,
-                        conversationTitle = "图片分析"
+                        conversationTitle = "新对话"
                     )
                 }
-                conversationRepository.addMessage(
-                    conversationId = currentConversationId,
-                    content = userContent,
-                    role = "user"
-                )
-                _uiState.value = _uiState.value.copy(
-                    messages = conversationRepository.getMessagesOnce(currentConversationId).map { entity ->
-                        ChatMessage(
-                            id = entity.id.toString(),
-                            content = entity.content,
-                            isUser = entity.role == "user",
-                            timestamp = entity.createdAt,
-                            audioUrl = entity.audioUrl
-                        )
-                    }
-                )
 
-                // 2. 调用 Qwen 分析
-                val appCode = apiKeyManager.getLinkAIAppCode().ifEmpty { null }
+                // 1. 调用千问识别图片
                 val result = aiService.recognizeImage(
                     imagePath = imagePath,
-                    sessionId = "vision_${System.currentTimeMillis()}",
-                    appCode = appCode
+                    sessionId = "vision_${System.currentTimeMillis()}"
                 )
 
-                // 3. 处理分析结果
                 result.fold(
-                    onSuccess = { analysisText ->
-                        com.glasses.app.util.AppLogger.i(TAG, "Qwen 分析完成，结果长度=${analysisText.length}")
+                    onSuccess = { description ->
+                        com.glasses.app.util.AppLogger.i(TAG, "千问识别完成，长度=${description.length}")
+
+                        // 2. 识别结果作为用户消息
+                        addUserMessage(description)
                         conversationRepository.addMessage(
                             conversationId = currentConversationId,
-                            content = analysisText,
-                            role = "assistant"
+                            content = description,
+                            role = "user"
                         )
+
+                        // 3. 发送给超级AI助理
                         _uiState.value = _uiState.value.copy(
-                            messages = conversationRepository.getMessagesOnce(currentConversationId).map { entity ->
-                                ChatMessage(
-                                    id = entity.id.toString(),
-                                    content = entity.content,
-                                    isUser = entity.role == "user",
-                                    timestamp = entity.createdAt,
-                                    audioUrl = entity.audioUrl
-                                )
-                            }
+                            isProcessing = true,
+                            statusMessage = "AI分析中..."
                         )
+                        sendToSuperAssistant(description)
                     },
                     onFailure = { error ->
-                        val errorMsg = "图片分析失败: ${error.message}"
-                        com.glasses.app.util.AppLogger.e(TAG, errorMsg, error)
-                        conversationRepository.addMessage(
-                            conversationId = currentConversationId,
-                            content = "图片分析失败，请重试。错误：${error.message}",
-                            role = "assistant"
-                        )
+                        com.glasses.app.util.AppLogger.e(TAG, "图片识别失败: ${error.message}", error)
                         _uiState.value = _uiState.value.copy(
-                            messages = conversationRepository.getMessagesOnce(currentConversationId).map { entity ->
-                                ChatMessage(
-                                    id = entity.id.toString(),
-                                    content = entity.content,
-                                    isUser = entity.role == "user",
-                                    timestamp = entity.createdAt,
-                                    audioUrl = entity.audioUrl
-                                )
-                            }
+                            isProcessing = false,
+                            statusMessage = "图片识别失败: ${error.message}"
                         )
                     }
                 )
-
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = false,
-                    statusMessage = ""
-                )
             } catch (e: Exception) {
-                val errorMsg = "图片分析异常: ${e.message}"
-                com.glasses.app.util.AppLogger.e(TAG, errorMsg, e)
+                com.glasses.app.util.AppLogger.e(TAG, "图片分析异常: ${e.message}", e)
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
-                    statusMessage = errorMsg
+                    statusMessage = "图片分析异常: ${e.message}"
                 )
             }
         }

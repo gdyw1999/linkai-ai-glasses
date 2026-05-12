@@ -38,6 +38,9 @@ class GlassesSDKManager private constructor(context: Context) {
     // 使用ApplicationContext避免内存泄漏
     private val appContext: Context = context.applicationContext
 
+    /** 对外暴露 ApplicationContext，供 DeviceNotifyListener 等组件获取 WakeupManager 实例 */
+    fun getAppContext(): Context = appContext
+
     companion object {
         private const val TAG = "GlassesSDKManager"
         

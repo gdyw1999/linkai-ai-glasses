@@ -128,7 +128,8 @@ class ConversationRepository(context: Context) {
         conversationId: Long,
         content: String,
         role: String,
-        audioUrl: String? = null
+        audioUrl: String? = null,
+        thinkingContent: String? = null
     ): Long {
         return try {
             val message = MessageEntity(
@@ -136,6 +137,7 @@ class ConversationRepository(context: Context) {
                 content = content,
                 role = role,
                 audioUrl = audioUrl,
+                thinkingContent = thinkingContent,
                 createdAt = System.currentTimeMillis()
             )
             val messageId = messageDao.insertMessage(message)
@@ -243,6 +245,7 @@ class ConversationRepository(context: Context) {
                                 "content" to msg.content,
                                 "role" to msg.role,
                                 "audioUrl" to (msg.audioUrl ?: ""),
+                                "thinkingContent" to (msg.thinkingContent ?: ""),
                                 "createdAt" to msg.createdAt
                             )
                         }
@@ -295,6 +298,7 @@ class ConversationRepository(context: Context) {
                     val msgContent = msgMap["content"] as? String ?: ""
                     val msgRole = msgMap["role"] as? String ?: "user"
                     val msgAudioUrl = msgMap["audioUrl"] as? String
+                    val msgThinkingContent = msgMap["thinkingContent"] as? String
                     val msgCreatedAt = (msgMap["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
 
                     val msgEntity = MessageEntity(
@@ -302,6 +306,7 @@ class ConversationRepository(context: Context) {
                         content = msgContent,
                         role = msgRole,
                         audioUrl = msgAudioUrl?.takeIf { it.isNotEmpty() },
+                        thinkingContent = msgThinkingContent?.takeIf { it.isNotEmpty() },
                         createdAt = msgCreatedAt
                     )
                     database.messageDao().insertMessage(msgEntity)
